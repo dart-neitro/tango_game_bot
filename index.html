@@ -249,6 +249,25 @@
             50% { transform: scale(1.1); }
         }
 
+        @keyframes hint-blink {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 0 0 0 rgba(74, 222, 128, 0);
+            }
+            25% { 
+                transform: scale(1.05);
+                box-shadow: 0 0 15px rgba(74, 222, 128, 0.6);
+            }
+            50% { 
+                transform: scale(1.1);
+                box-shadow: 0 0 20px rgba(74, 222, 128, 0.8);
+            }
+            75% { 
+                transform: scale(1.05);
+                box-shadow: 0 0 15px rgba(74, 222, 128, 0.6);
+            }
+        }
+
         .cell-symbol {
             font-weight: bold;
             text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
@@ -2374,6 +2393,7 @@
                 const grid = this.gridSystem.grid;
                 const size = this.gridSystem.size;
                 
+                // First pass: Try constraint-based hints (fast path)
                 for (let row = 0; row < size; row++) {
                     for (let col = 0; col < size; col++) {
                         if (grid[row][col].value === null && !grid[row][col].immutable) {
@@ -2383,6 +2403,7 @@
                                     success: true,
                                     row, col,
                                     suggestedValue: hint,
+                                    source: 'constraint',
                                     reason: 'Based on current constraints'
                                 };
                             }
@@ -2390,7 +2411,20 @@
                     }
                 }
                 
-                return { success: false, reason: 'No obvious hints available' };
+                // Second pass: Use solver to find valid next move (comprehensive path)
+                const solverHint = this.calculateSolverHint();
+                if (solverHint) {
+                    return {
+                        success: true,
+                        row: solverHint.row,
+                        col: solverHint.col,
+                        suggestedValue: solverHint.value,
+                        source: 'solver',
+                        reason: 'Based on puzzle solution'
+                    };
+                }
+                
+                return { success: false, reason: 'No hints available' };
             }
 
             calculateHint(row, col) {
@@ -2416,6 +2450,122 @@
                 }
                 
                 return null;
+            }
+
+            /**
+             * Uses backtracking solver to find a valid next move
+             * @returns {Object|null} { row, col, value } or null if no solution
+             */
+            calculateSolverHint() {
+                const grid = JSON.parse(JSON.stringify(this.gridSystem.grid));
+                const constraints = this.gridSystem.getConstraints();
+                const size = this.gridSystem.size;
+                
+                // Find first empty cell and try to solve from there
+                for (let row = 0; row < size; row++) {
+                    for (let col = 0; col < size; col++) {
+                        if (grid[row][col].value === null && !grid[row][col].immutable) {
+                            // Try both values and see which one is valid
+                            for (const value of ['orange', 'moon']) {
+                                grid[row][col].value = value;
+                                
+                                // Check if this placement is valid
+                                if (this.isValidPlacement(grid, row, col, constraints)) {
+                                    // Quick check: does this not immediately break balance?
+                                    if (this.isBalanceFeasible(grid, row, col)) {
+                                        return { row, col, value };
+                                    }
+                                }
+                                
+                                grid[row][col].value = null; // Backtrack
+                            }
+                            
+                            // If neither value works, no hint available for this cell
+                            return null;
+                        }
+                    }
+                }
+                
+                return null; // No empty cells found
+            }
+
+            /**
+             * Checks if a placement is valid (doesn't violate rules)
+             */
+            isValidPlacement(grid, row, col, constraints) {
+                const size = grid.length;
+                const cellValue = grid[row][col].value;
+                
+                // Check adjacency rule (no more than 2 consecutive)
+                // Horizontal check
+                let consecutiveHorizontal = 1;
+                for (let c = col - 1; c >= 0 && grid[row][c].value === cellValue; c--) {
+                    consecutiveHorizontal++;
+                }
+                for (let c = col + 1; c < size && grid[row][c].value === cellValue; c++) {
+                    consecutiveHorizontal++;
+                }
+                if (consecutiveHorizontal > 2) return false;
+                
+                // Vertical check
+                let consecutiveVertical = 1;
+                for (let r = row - 1; r >= 0 && grid[r][col].value === cellValue; r--) {
+                    consecutiveVertical++;
+                }
+                for (let r = row + 1; r < size && grid[r][col].value === cellValue; r++) {
+                    consecutiveVertical++;
+                }
+                if (consecutiveVertical > 2) return false;
+                
+                // Check constraints involving this cell
+                for (const constraint of constraints) {
+                    const isCell1 = constraint.cell1.row === row && constraint.cell1.col === col;
+                    const isCell2 = constraint.cell2.row === row && constraint.cell2.col === col;
+                    
+                    if (isCell1 || isCell2) {
+                        const otherCell = isCell1 ? constraint.cell2 : constraint.cell1;
+                        const otherValue = grid[otherCell.row][otherCell.col].value;
+                        
+                        if (otherValue !== null) {
+                            if (constraint.type === 'equal' && cellValue !== otherValue) return false;
+                            if (constraint.type === 'notequal' && cellValue === otherValue) return false;
+                        }
+                    }
+                }
+                
+                return true;
+            }
+
+            /**
+             * Checks if balance is still feasible after placement
+             */
+            isBalanceFeasible(grid, row, col) {
+                const size = grid.length;
+                const targetCount = size / 2;
+                
+                // Check row balance feasibility
+                let rowOrange = 0, rowMoon = 0, rowEmpty = 0;
+                for (let c = 0; c < size; c++) {
+                    if (grid[row][c].value === 'orange') rowOrange++;
+                    else if (grid[row][c].value === 'moon') rowMoon++;
+                    else rowEmpty++;
+                }
+                
+                // If already exceeded limit, not feasible
+                if (rowOrange > targetCount || rowMoon > targetCount) return false;
+                
+                // Check column balance feasibility
+                let colOrange = 0, colMoon = 0, colEmpty = 0;
+                for (let r = 0; r < size; r++) {
+                    if (grid[r][col].value === 'orange') colOrange++;
+                    else if (grid[r][col].value === 'moon') colMoon++;
+                    else colEmpty++;
+                }
+                
+                // If already exceeded limit, not feasible
+                if (colOrange > targetCount || colMoon > targetCount) return false;
+                
+                return true;
             }
 
             serialize() {
@@ -4132,7 +4282,8 @@
                 const vibrationMap = {
                     light: 10,
                     medium: 20,
-                    heavy: 50
+                    heavy: 50,
+                    error: [100, 50, 100] // Double pulse for errors
                 };
 
                 navigator.vibrate(vibrationMap[type] || 10);
@@ -4471,6 +4622,12 @@
         const VALIDATION_DELAY = 500; // milliseconds
         let validationTimeout = null;
         
+        // Error vibration tracking
+        let previousErrorCount = 0;
+        
+        // Hint display configuration
+        const HINT_DISPLAY_TIME = 1500; // milliseconds (1.5 seconds)
+        
         // Expose validation delay globally for testing
         window.VALIDATION_DELAY = VALIDATION_DELAY;
 
@@ -4657,12 +4814,30 @@
             if (hint.success) {
                 const cell = document.querySelector(`[data-row="${hint.row}"][data-col="${hint.col}"]`);
                 if (cell) {
+                    // Store original content
+                    const originalHTML = cell.innerHTML;
+                    
+                    // Show suggested value temporarily
+                    const symbol = hint.suggestedValue === 'orange' ? '🟠' : '🌙';
+                    const symbolSpan = cell.querySelector('.cell-symbol') || document.createElement('span');
+                    symbolSpan.className = 'cell-symbol';
+                    symbolSpan.textContent = symbol;
+                    symbolSpan.style.opacity = '0.7';
+                    
+                    if (!cell.querySelector('.cell-symbol')) {
+                        cell.appendChild(symbolSpan);
+                    }
+                    
+                    // Trigger animation
                     cell.style.animation = 'none';
                     cell.offsetHeight; // Trigger reflow
-                    cell.style.animation = 'error-pulse 0.6s ease-in-out';
+                    cell.style.animation = `hint-blink ${HINT_DISPLAY_TIME / 1000}s ease-in-out`;
+                    
+                    // Remove hint after animation
                     setTimeout(() => {
                         cell.style.animation = '';
-                    }, 600);
+                        cell.innerHTML = originalHTML;
+                    }, HINT_DISPLAY_TIME);
                 }
             }
         }
@@ -4675,6 +4850,9 @@
             gameInstance.newGame(size, difficulty, seedInput.trim() || null);
             document.querySelector('[data-testid="seed-input"]').value = '';
             
+            // Reset error tracking for new game
+            previousErrorCount = 0;
+            
             // Update URL with new game parameters
             updateURL(size, difficulty, gameInstance.seed);
             
@@ -4683,6 +4861,10 @@
 
         function handleReset() {
             gameInstance.resetGame();
+            
+            // Reset error tracking
+            previousErrorCount = 0;
+            
             updateUIImmediate();
         }
 
@@ -4696,6 +4878,9 @@
             
             // Generate new game with updated settings (no custom seed = random generation)
             gameInstance.newGame(size, difficulty);
+            
+            // Reset error tracking for new game
+            previousErrorCount = 0;
             
             // Update URL with new parameters and generated seed
             updateURL(size, difficulty, gameInstance.seed);
@@ -5002,6 +5187,15 @@
                     cellElement.dataset.errorType = errorCell.type;
                 }
             });
+
+            // Trigger error vibration if new errors detected
+            const currentErrorCount = errorCells.length;
+            if (currentErrorCount > 0 && currentErrorCount > previousErrorCount) {
+                if (themeManager) {
+                    themeManager.triggerHapticFeedback('error');
+                }
+            }
+            previousErrorCount = currentErrorCount;
         }
 
         function debouncedUpdateErrors() {
