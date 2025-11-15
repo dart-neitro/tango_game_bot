@@ -1,0 +1,4263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tango - Logic Puzzle Game</title>
+    <style>
+        /* CSS Custom Properties for Theme System */
+        :root {
+            --primary-bg: #1e1e2e;
+            --secondary-bg: #313244;
+            --tertiary-bg: #45475a;
+            --tertiary-bg-active: #484a5d;
+            --text-primary: #cdd6f4;
+            --text-secondary: #bac2de;
+            --accent-green: #a6e3a1;
+            --accent-red: #f38ba8;
+            --border-color: #6c7086;
+            --border-hover: #9399b2;
+            --shadow-color: rgba(0, 0, 0, 0.3);
+            
+            /* Cell Background Variables */
+            --cell-bg-empty: var(--secondary-bg);
+            --cell-bg-type1-active: var(--tertiary-bg-active);
+            --cell-bg-type2-active: var(--tertiary-bg-active);
+            --cell-bg-type1-immutable: var(--tertiary-bg);
+            --cell-bg-type2-immutable: var(--tertiary-bg);
+            --cell-bg-hover: var(--tertiary-bg);
+            --cell-bg-error: var(--accent-red);
+        }
+
+        [data-appearance="light"] {
+            --primary-bg: #ffffff;
+            --secondary-bg: #f5f5f5;
+            --tertiary-bg: #e0e0e0;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --accent-green: #34a853;
+            --accent-red: #ea4335;
+            --border-color: #cccccc;
+            --border-hover: #999999;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+            
+            /* Light theme cell background overrides */
+            --cell-bg-type1-active: #ff8c42;
+            --cell-bg-type2-active: #4285f4;
+        }
+
+        /* Responsive Grid System */
+        .responsive-grid-container {
+            --icon-size: min(1.5rem, calc(var(--cell-size) * .4));
+            --text-size: calc(var(--cell-size) * 0.5);
+        }
+
+        .grid-size-4 {
+            --grid-size: 4;
+            --gap-total: .75rem;
+            --cell-size: min(64px, calc((100vw - 3rem - var(--gap-total)) / var(--grid-size)));
+        }
+
+        .grid-size-6 {
+            --grid-size: 6;
+            --gap-total: 1.25rem;
+            --cell-size: min(64px, calc((100vw - 3rem - var(--gap-total)) / var(--grid-size)));
+        }
+
+        .grid-size-8 {
+            --grid-size: 8;
+            --gap-total: 1.75rem;
+            --cell-size: min(56px, calc((100vw - 1.5rem - var(--gap-total)) / var(--grid-size)));
+        }
+
+        .grid-size-10 {
+            --grid-size: 10;
+            --gap-total: 2.25rem;
+            --cell-size: min(48px, calc((100vw - 1rem - var(--gap-total)) / var(--grid-size)));
+        }
+
+        /* Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--primary-bg);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 20px;
+            background-color: var(--secondary-bg);
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, var(--cell-bg-type1-active), var(--cell-bg-type2-active));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Timer Display */
+        .timer-display {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            margin-bottom: 20px;
+        }
+
+        .timer-value {
+            font-size: 2rem;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            color: var(--accent-green);
+            text-shadow: 0 2px 4px var(--shadow-color);
+        }
+
+        .timer-status {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Main Game Area */
+        .game-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            gap: 30px;
+        }
+
+        /* Game Grid */
+        .game-grid {
+            display: grid;
+            gap: 2px;
+            background-color: var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 8px 24px var(--shadow-color);
+            width: fit-content;
+        }
+
+        /* Responsive grids still need max-width constraint */
+        .game-grid.grid-size-8,
+        .game-grid.grid-size-10 {
+            max-width: min(85vw, 85vh);
+        }
+
+        .game-grid[data-size="4"] { grid-template-columns: repeat(4, var(--cell-size)); }
+        .game-grid[data-size="6"] { grid-template-columns: repeat(6, var(--cell-size)); }
+        .game-grid[data-size="8"] { grid-template-columns: repeat(8, var(--cell-size)); }
+        .game-grid[data-size="10"] { grid-template-columns: repeat(10, var(--cell-size)); }
+
+        .grid-cell {
+            width: var(--cell-size);
+            height: var(--cell-size);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--cell-bg-empty);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            font-size: var(--text-size);
+            user-select: none;
+        }
+        
+        /* Responsive cell sizing based on grid size - now using CSS custom properties */
+
+        .grid-cell:hover {
+            background-color: var(--cell-bg-hover);
+            border-color: var(--border-hover);
+            transform: scale(1.05);
+        }
+
+        .grid-cell[data-cell-value="orange"] {
+            background-color: var(--cell-bg-type1-active);
+            color: white;
+        }
+
+        .grid-cell[data-cell-value="moon"] {
+            background-color: var(--cell-bg-type2-active);
+            color: white;
+        }
+
+        .grid-cell[data-cell-immutable="true"][data-cell-value="orange"] {
+            background-color: var(--cell-bg-type1-immutable);
+            cursor: not-allowed;
+            opacity: 0.8;
+            border-width: 2px;
+        }
+
+        .grid-cell[data-cell-immutable="true"][data-cell-value="moon"] {
+            background-color: var(--cell-bg-type2-immutable);
+            cursor: not-allowed;
+            opacity: 0.8;
+            border-width: 2px;
+        }
+
+        .grid-cell[data-cell-immutable="true"]:not([data-cell-value]) {
+            background-color: var(--cell-bg-type1-immutable);
+            cursor: not-allowed;
+            opacity: 0.8;
+            border-width: 2px;
+        }
+
+        .grid-cell[data-cell-immutable="true"]:hover {
+            transform: none;
+        }
+
+        .grid-cell[data-cell-error="true"] {
+            background-color: var(--cell-bg-error) !important;
+            animation: error-pulse 0.6s ease-in-out;
+            box-shadow: 0 0 10px var(--cell-bg-error);
+        }
+
+        @keyframes error-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .cell-symbol {
+            font-weight: bold;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Constraint Indicators */
+        .constraint-indicator {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: bold;
+            line-height: 1;
+            width: 32px;
+            height: 32px;
+            z-index: 20;
+            pointer-events: none;
+            transform-origin: center center;
+        }
+
+        .constraint-indicator.equal {
+            color: var(--accent-green);
+        }
+
+        .constraint-indicator.notequal {
+            color: var(--accent-red);
+        }
+
+        .constraint-indicator.right { 
+            right: -17px; 
+            top: 50%; 
+            transform: translateY(-50%) scale(0.952); /* Counter parent scale(1.05) */
+        }
+        .constraint-indicator.bottom { 
+            top: calc(100% + 1px); 
+            left: 50%; 
+            transform: translate(-50%, -50%) scale(0.952); /* Counter parent scale(1.05) */
+        }
+
+        /* When parent cell is hovered, counteract the scale effect */
+        .cell:hover .constraint-indicator.right {
+            transform: translateY(-50%) scale(0.906); /* 0.952 / 1.05 */
+        }
+        .cell:hover .constraint-indicator.bottom {
+            transform: translate(-50%, -50%) scale(0.906); /* 0.952 / 1.05 */
+        }
+
+        /* Control Panel */
+        .control-panel {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background-color: var(--secondary-bg);
+            color: var(--text-primary);
+            border: 2px solid var(--border-color);
+        }
+
+        .btn:hover {
+            background-color: var(--tertiary-bg);
+            border-color: var(--border-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px var(--shadow-color);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn.primary {
+            background-color: var(--cell-bg-type2-active);
+            border-color: var(--cell-bg-type2-active);
+            color: white;
+        }
+
+        .btn.danger {
+            background-color: var(--accent-red);
+            border-color: var(--accent-red);
+            color: white;
+        }
+
+        /* Configuration Panel */
+        .config-panel {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            background-color: var(--secondary-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .config-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .config-group label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .config-group select,
+        .config-group input {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background-color: var(--primary-bg);
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        /* Theme Toggle */
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .theme-toggle:hover {
+            background-color: var(--tertiary-bg);
+        }
+
+        /* Seed Display */
+        .seed-display {
+            text-align: center;
+            padding: 15px;
+            background-color: var(--secondary-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .seed-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .seed-value {
+            font-family: 'Courier New', monospace;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--accent-green);
+            letter-spacing: 1px;
+        }
+
+        /* Completion Dialog */
+        .completion-dialog {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .completion-dialog.show {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .completion-content {
+            background-color: var(--primary-bg);
+            padding: 40px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            border: 2px solid var(--accent-green);
+            max-width: 400px;
+            transform: scale(0.8);
+            transition: transform 0.3s ease;
+        }
+
+        .completion-dialog.show .completion-content {
+            transform: scale(1);
+        }
+
+        .completion-title {
+            font-size: 2rem;
+            margin-bottom: 20px;
+            color: var(--accent-green);
+        }
+
+        .completion-stats {
+            margin: 20px 0;
+            color: var(--text-secondary);
+        }
+
+        .completion-time {
+            font-size: 1.5rem;
+            color: var(--cell-bg-type2-active);
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .control-panel, .config-panel {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .timer-value {
+                font-size: 1.5rem;
+            }
+        }
+
+        /* Theme Modal Styles */
+        .theme-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+
+        .theme-modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--secondary-bg);
+            border-radius: 12px;
+            padding: 30px;
+            width: min(90vw, 500px);
+            max-height: 85vh;
+            overflow-y: auto;
+            border: 2px solid var(--border-color);
+            box-shadow: 0 20px 40px var(--shadow-color);
+        }
+
+        .theme-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .theme-modal-header h2 {
+            margin: 0;
+            color: var(--text-primary);
+            font-size: 1.5rem;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: var(--tertiary-bg);
+            color: var(--text-primary);
+        }
+
+        .theme-modal h3 {
+            margin: 0 0 15px 0;
+            color: var(--text-primary);
+            font-size: 1.1rem;
+        }
+
+        .appearance-section,
+        .theme-selection-section,
+        .theme-preview,
+        .accessibility-section {
+            margin-bottom: 25px;
+        }
+
+        /* Appearance Toggle Buttons */
+        .appearance-toggle-group {
+            display: flex;
+            gap: 8px;
+            background: var(--tertiary-bg);
+            padding: 4px;
+            border-radius: 8px;
+        }
+
+        .appearance-btn {
+            flex: 1;
+            padding: 12px 16px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .appearance-btn:hover {
+            background: var(--secondary-bg);
+            color: var(--text-primary);
+        }
+
+        .appearance-btn.active {
+            background: var(--cell-bg-type2-active);
+            color: white;
+        }
+
+        .mode-icon {
+            font-size: 16px;
+        }
+
+        /* Theme Selection */
+        .theme-dropdown {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--tertiary-bg);
+            color: var(--text-primary);
+            font-size: 14px;
+            cursor: pointer;
+            transition: border-color 0.2s ease;
+        }
+
+        .theme-dropdown:focus {
+            outline: none;
+            border-color: var(--cell-bg-type2-active);
+        }
+
+        .theme-dropdown:hover {
+            border-color: var(--border-hover);
+        }
+
+        /* Theme Preview */
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 40px);
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 10px;
+            padding: 15px;
+            background: var(--tertiary-bg);
+            border-radius: 8px;
+        }
+
+        .preview-cell {
+            width: 40px;
+            height: 40px;
+            border: 2px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--primary-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.2s ease;
+        }
+
+        .preview-constraint {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: bold;
+            color: var(--text-primary);
+        }
+
+        .theme-description {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-style: italic;
+        }
+
+        /* Accessibility Settings */
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .setting-row:last-child {
+            border-bottom: none;
+        }
+
+        .setting-info {
+            flex: 1;
+        }
+
+        .setting-label {
+            display: block;
+            color: var(--text-primary);
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .setting-description {
+            color: var(--text-secondary);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 28px;
+            margin-left: 20px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--border-color);
+            transition: 0.3s;
+            border-radius: 28px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: var(--cell-bg-type2-active);
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(22px);
+        }
+
+        /* Large Constraints Mode */
+        body.large-constraints .constraint {
+            font-size: 1.5rem !important;
+        }
+
+        body.large-constraints .constraint-indicator {
+            font-size: 28px !important;
+            width: 44px !important;
+            height: 44px !important;
+        }
+
+        body.large-constraints .preview-constraint {
+            font-size: 24px !important;
+        }
+
+        /* Theme-specific built-in themes */
+        /* Icon themes only control symbols, not colors */
+
+        /* Accessibility */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* Mobile Responsiveness */
+        @media (max-width: 768px) {
+            .theme-modal-content {
+                width: 95vw;
+                padding: 20px;
+                max-height: 90vh;
+            }
+            
+            .appearance-toggle-group {
+                flex-direction: column;
+                gap: 4px;
+            }
+            
+            .appearance-btn {
+                padding: 10px 12px;
+            }
+            
+            .setting-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            
+            .toggle-switch {
+                margin-left: 0;
+                align-self: flex-end;
+            }
+        }
+    </style>
+</head>
+<body data-appearance="dark" data-iconTheme="day-night">
+    <div class="header">
+        <h1>Tango</h1>
+        <div class="timer-display">
+            <div data-testid="timer" class="timer-value">00:00.00</div>
+            <div class="timer-status">READY</div>
+        </div>
+    </div>
+
+    <div class="game-container">
+        <div data-testid="game-grid" class="game-grid responsive-grid-container grid-size-6" data-size="6"></div>
+
+        <div class="control-panel">
+            <button data-testid="undo-btn" class="btn">↶ Undo</button>
+            <button data-testid="hints-btn" class="btn">👁 Hints</button>
+            <button data-testid="new-game-btn" class="btn primary">🎲 New Game</button>
+            <button data-testid="reset-btn" class="btn danger">🔄 Reset</button>
+        </div>
+
+        <div class="config-panel">
+            <div class="config-group">
+                <label>Board Size</label>
+                <select data-testid="board-size-select">
+                    <option value="4">4x4</option>
+                    <option value="6" selected>6x6</option>
+                    <option value="8">8x8</option>
+                    <option value="10">10x10</option>
+                </select>
+            </div>
+
+            <div class="config-group">
+                <label>Difficulty</label>
+                <select data-testid="difficulty-select">
+                    <option value="easy">Easy</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="hard">Hard</option>
+                </select>
+            </div>
+
+            <div class="config-group">
+                <label>Seed (Optional)</label>
+                <input data-testid="seed-input" type="text" placeholder="Enter seed" maxlength="8">
+            </div>
+
+            <div data-testid="theme-toggle" class="theme-toggle">
+                <span>🌙</span>
+                <span>☀️</span>
+            </div>
+        </div>
+
+        <div class="seed-display">
+            <div class="seed-label">Current Seed:</div>
+            <div data-testid="current-seed" class="seed-value">LOADING</div>
+        </div>
+    </div>
+
+    <!-- Completion Dialog -->
+    <div data-testid="completion-dialog" class="completion-dialog">
+        <div class="completion-content">
+            <div class="completion-title">🎉 Puzzle Solved!</div>
+            <div>Congratulations! You completed the puzzle.</div>
+            <div class="completion-time" data-testid="completion-time">00:00.00</div>
+            <div class="completion-stats" data-testid="completion-stats">
+                <div>Difficulty: <span data-testid="completion-difficulty">Medium</span></div>
+                <div>Board Size: <span data-testid="completion-size">6x6</span></div>
+                <div>Seed: <span data-testid="completion-seed">ABC123</span></div>
+            </div>
+            <div style="display: flex; gap: 15px; margin-top: 25px; justify-content: center;">
+                <button class="btn primary" onclick="startNewGame()">New Game</button>
+                <button class="btn" onclick="closeCompletionDialog()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Theme & Style Modal -->
+    <div data-testid="theme-modal" class="theme-modal">
+        <div class="theme-modal-content">
+            <div class="theme-modal-header">
+                <h2>Theme & Style</h2>
+                <button class="modal-close" data-testid="modal-close" onclick="closeThemeModal()">&times;</button>
+            </div>
+            
+            <div class="appearance-section">
+                <h3>Appearance</h3>
+                <div class="appearance-toggle-group">
+                    <button class="appearance-btn" data-mode="light" data-testid="light-mode" onclick="setAppearanceMode('light')">
+                        <span class="mode-icon">☀️</span>
+                        <span>Light</span>
+                    </button>
+                    <button class="appearance-btn active" data-mode="dark" data-testid="dark-mode" onclick="setAppearanceMode('dark')">
+                        <span class="mode-icon">🌙</span>
+                        <span>Dark</span>
+                    </button>
+                    <button class="appearance-btn" data-mode="auto" data-testid="auto-mode" onclick="setAppearanceMode('auto')">
+                        <span class="mode-icon">📱</span>
+                        <span>Auto</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="theme-selection-section">
+                <h3>Icon Theme</h3>
+                <select class="theme-dropdown" data-testid="theme-dropdown" onchange="selectIconTheme(this.value)">
+                    <option value="classic">Classic (0, 1)</option>
+                    <option value="fire-ice">Fire & Ice (❄️, 🔥)</option>
+                    <option value="nature">Nature (🐢, 🐰)</option>
+                    <option value="day-night">Day & Night (🌙, ☀️)</option>
+                    <option value="shapes">Shapes (⭕, ❌)</option>
+                    <option value="numbers">Numbers (➊, ➋)</option>
+                    <option value="black-white">Black & White (⬜, ⬛)</option>
+                </select>
+            </div>
+            
+            <div class="theme-preview">
+                <h3>Preview</h3>
+                <div class="preview-grid" data-testid="preview-grid">
+                    <div class="preview-cell">🟠</div>
+                    <div class="preview-cell">🌙</div>
+                    <div class="preview-constraint">=</div>
+                    <div class="preview-cell"></div>
+                    <div class="preview-cell">🟠</div>
+                    <div class="preview-constraint">≠</div>
+                </div>
+                <div class="theme-description" data-testid="theme-description">
+                    Classic: Using 0 and 1 symbols
+                </div>
+            </div>
+            
+            <div class="accessibility-section">
+                <h3>Accessibility</h3>
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <span class="setting-label">Haptic Feedback</span>
+                        <span class="setting-description">Enable vibration feedback when tapping cells (mobile devices only)</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="haptic-toggle" data-testid="haptic-toggle" onchange="toggleHapticFeedback(this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <span class="setting-label">Large Constraint Icons</span>
+                        <span class="setting-description">Make constraint symbols (= and ≠) larger and easier to see</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="constraints-toggle" data-testid="constraints-toggle" onchange="toggleLargeConstraints(this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * GridSystem Class - Manages 2D grid state and constraints
+         * Handles cell management, immutable cells, and constraint relationships
+         */
+        class GridSystem {
+            constructor(size = 6) {
+                this.size = size;
+                this.grid = this.initializeGrid();
+                this.constraints = new Map();
+            }
+
+            initializeGrid() {
+                const grid = [];
+                for (let row = 0; row < this.size; row++) {
+                    grid[row] = [];
+                    for (let col = 0; col < this.size; col++) {
+                        grid[row][col] = {
+                            value: null, // null | 'orange' | 'moon'
+                            immutable: false,
+                            constraints: {}
+                        };
+                    }
+                }
+                return grid;
+            }
+
+            setCell(row, col, value) {
+                if (this.isValidPosition(row, col) && !this.grid[row][col].immutable) {
+                    this.grid[row][col].value = value;
+                    return true;
+                }
+                return false;
+            }
+
+            getCell(row, col) {
+                if (this.isValidPosition(row, col)) {
+                    return this.grid[row][col];
+                }
+                return null;
+            }
+
+            isValidPosition(row, col) {
+                return row >= 0 && row < this.size && col >= 0 && col < this.size;
+            }
+
+            setImmutable(row, col, value) {
+                if (this.isValidPosition(row, col)) {
+                    this.grid[row][col].value = value;
+                    this.grid[row][col].immutable = true;
+                    return true;
+                }
+                return false;
+            }
+
+            addConstraint(row1, col1, row2, col2, type) {
+                if (this.isValidPosition(row1, col1) && this.isValidPosition(row2, col2)) {
+                    const constraintId = `${row1},${col1}-${row2},${col2}`;
+                    this.constraints.set(constraintId, {
+                        cell1: { row: row1, col: col1 },
+                        cell2: { row: row2, col: col2 },
+                        type: type // 'equal' | 'notequal'
+                    });
+                    return true;
+                }
+                return false;
+            }
+
+            getConstraints() {
+                return Array.from(this.constraints.values());
+            }
+
+            serialize() {
+                return {
+                    size: this.size,
+                    grid: this.grid,
+                    constraints: Array.from(this.constraints.entries())
+                };
+            }
+
+            deserialize(data) {
+                this.size = data.size;
+                this.grid = data.grid;
+                this.constraints = new Map(data.constraints);
+            }
+
+            clear() {
+                for (let row = 0; row < this.size; row++) {
+                    for (let col = 0; col < this.size; col++) {
+                        if (!this.grid[row][col].immutable) {
+                            this.grid[row][col].value = null;
+                        }
+                    }
+                }
+            }
+        }
+
+        /**
+         * RuleValidator Class - Validates game rules and provides error detection
+         * Handles adjacent limits, balance constraints, and constraint relationships
+         */
+        class RuleValidator {
+            constructor(gridSystem) {
+                this.gridSystem = gridSystem;
+            }
+
+            validateAdjacentLimits() {
+                const errors = [];
+                const grid = this.gridSystem.grid;
+                const size = this.gridSystem.size;
+
+                // Check horizontal adjacent limits
+                for (let row = 0; row < size; row++) {
+                    let consecutiveCount = 1;
+                    let currentValue = grid[row][0].value;
+                    
+                    for (let col = 1; col < size; col++) {
+                        if (grid[row][col].value === currentValue && currentValue !== null) {
+                            consecutiveCount++;
+                            if (consecutiveCount > 2) {
+                                errors.push({
+                                    type: 'adjacent',
+                                    direction: 'horizontal',
+                                    row: row,
+                                    startCol: col - 2,
+                                    endCol: col,
+                                    value: currentValue
+                                });
+                            }
+                        } else {
+                            consecutiveCount = 1;
+                            currentValue = grid[row][col].value;
+                        }
+                    }
+                }
+
+                // Check vertical adjacent limits
+                for (let col = 0; col < size; col++) {
+                    let consecutiveCount = 1;
+                    let currentValue = grid[0][col].value;
+                    
+                    for (let row = 1; row < size; row++) {
+                        if (grid[row][col].value === currentValue && currentValue !== null) {
+                            consecutiveCount++;
+                            if (consecutiveCount > 2) {
+                                errors.push({
+                                    type: 'adjacent',
+                                    direction: 'vertical',
+                                    col: col,
+                                    startRow: row - 2,
+                                    endRow: row,
+                                    value: currentValue
+                                });
+                            }
+                        } else {
+                            consecutiveCount = 1;
+                            currentValue = grid[row][col].value;
+                        }
+                    }
+                }
+
+                return errors;
+            }
+
+            validateBalance() {
+                const errors = [];
+                const grid = this.gridSystem.grid;
+                const size = this.gridSystem.size;
+
+                // Check row balance
+                for (let row = 0; row < size; row++) {
+                    let orangeCount = 0;
+                    let moonCount = 0;
+                    let totalFilled = 0;
+
+                    for (let col = 0; col < size; col++) {
+                        const value = grid[row][col].value;
+                        if (value === 'orange') {
+                            orangeCount++;
+                            totalFilled++;
+                        } else if (value === 'moon') {
+                            moonCount++;
+                            totalFilled++;
+                        }
+                    }
+
+                    const maxAllowed = Math.ceil(size / 2);
+                    if (orangeCount > maxAllowed || moonCount > maxAllowed) {
+                        errors.push({
+                            type: 'balance',
+                            direction: 'row',
+                            index: row,
+                            orangeCount,
+                            moonCount,
+                            exceeded: true
+                        });
+                    }
+                }
+
+                // Check column balance
+                for (let col = 0; col < size; col++) {
+                    let orangeCount = 0;
+                    let moonCount = 0;
+                    let totalFilled = 0;
+
+                    for (let row = 0; row < size; row++) {
+                        const value = grid[row][col].value;
+                        if (value === 'orange') {
+                            orangeCount++;
+                            totalFilled++;
+                        } else if (value === 'moon') {
+                            moonCount++;
+                            totalFilled++;
+                        }
+                    }
+
+                    const maxAllowed = Math.ceil(size / 2);
+                    if (orangeCount > maxAllowed || moonCount > maxAllowed) {
+                        errors.push({
+                            type: 'balance',
+                            direction: 'column',
+                            index: col,
+                            orangeCount,
+                            moonCount,
+                            exceeded: true
+                        });
+                    }
+                }
+
+                return errors;
+            }
+
+            validateConstraints() {
+                const errors = [];
+                const constraints = this.gridSystem.getConstraints();
+                const grid = this.gridSystem.grid;
+
+                for (const constraint of constraints) {
+                    const cell1 = grid[constraint.cell1.row][constraint.cell1.col];
+                    const cell2 = grid[constraint.cell2.row][constraint.cell2.col];
+
+                    if (cell1.value !== null && cell2.value !== null) {
+                        const areEqual = cell1.value === cell2.value;
+
+                        if (constraint.type === 'equal' && !areEqual) {
+                            errors.push({
+                                type: 'constraint',
+                                constraintType: 'equal',
+                                cell1: constraint.cell1,
+                                cell2: constraint.cell2,
+                                value1: cell1.value,
+                                value2: cell2.value
+                            });
+                        } else if (constraint.type === 'notequal' && areEqual) {
+                            errors.push({
+                                type: 'constraint',
+                                constraintType: 'notequal',
+                                cell1: constraint.cell1,
+                                cell2: constraint.cell2,
+                                value1: cell1.value,
+                                value2: cell2.value
+                            });
+                        }
+                    }
+                }
+
+                return errors;
+            }
+
+            validateAll() {
+                return {
+                    adjacentErrors: this.validateAdjacentLimits(),
+                    balanceErrors: this.validateBalance(),
+                    constraintErrors: this.validateConstraints()
+                };
+            }
+
+            isValid() {
+                const validation = this.validateAll();
+                return validation.adjacentErrors.length === 0 &&
+                       validation.balanceErrors.length === 0 &&
+                       validation.constraintErrors.length === 0;
+            }
+
+            getErrorCells() {
+                const validation = this.validateAll();
+                const errorCells = [];
+
+                validation.adjacentErrors.forEach(error => {
+                    if (error.direction === 'horizontal') {
+                        for (let col = error.startCol; col <= error.endCol; col++) {
+                            errorCells.push({ row: error.row, col, type: 'adjacent' });
+                        }
+                    } else {
+                        for (let row = error.startRow; row <= error.endRow; row++) {
+                            errorCells.push({ row, col: error.col, type: 'adjacent' });
+                        }
+                    }
+                });
+
+                validation.balanceErrors.forEach(error => {
+                    if (error.direction === 'row') {
+                        for (let col = 0; col < this.gridSystem.size; col++) {
+                            errorCells.push({ row: error.index, col, type: 'balance' });
+                        }
+                    } else {
+                        for (let row = 0; row < this.gridSystem.size; row++) {
+                            errorCells.push({ row, col: error.index, type: 'balance' });
+                        }
+                    }
+                });
+
+                validation.constraintErrors.forEach(error => {
+                    errorCells.push({ row: error.cell1.row, col: error.cell1.col, type: 'constraint' });
+                    errorCells.push({ row: error.cell2.row, col: error.cell2.col, type: 'constraint' });
+                });
+
+                return errorCells;
+            }
+        }
+
+        /**
+         * GameManager Class - Coordinates game state and user interactions
+         * Handles game lifecycle, moves, undo/redo, timer, and puzzle generation
+         */
+        class GameManager {
+            constructor(size = 6, difficulty = 'medium') {
+                this.gridSystem = new GridSystem(size);
+                this.ruleValidator = new RuleValidator(this.gridSystem);
+                this.gameState = 'ready'; // 'ready' | 'playing' | 'completed'
+                this.difficulty = difficulty;
+                this.seed = this.generateSeed();
+                this.timer = {
+                    startTime: null,
+                    elapsedTime: 0,
+                    isRunning: false
+                };
+                this.moveHistory = [];
+                this.currentMoveIndex = -1;
+                this.initialPuzzleState = null; // Store initial state for reset functionality
+                
+                this.initializePuzzle();
+            }
+
+            generateSeed() {
+                let seed = '';
+                const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                for (let i = 0; i < 8; i++) {
+                    seed += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                return seed;
+            }
+
+            // Simple seeded random number generator (Linear Congruential Generator)
+            seedRandom(seed) {
+                let hash = 0;
+                if (seed.length === 0) return hash;
+                for (let i = 0; i < seed.length; i++) {
+                    const char = seed.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash = hash & hash; // Convert to 32bit integer
+                }
+                
+                // Use the hash as initial seed for LCG
+                this.seedValue = Math.abs(hash);
+                
+                return () => {
+                    // Linear Congruential Generator parameters (from Numerical Recipes)
+                    this.seedValue = (this.seedValue * 1664525 + 1013904223) % Math.pow(2, 32);
+                    return this.seedValue / Math.pow(2, 32);
+                };
+            }
+
+            initializePuzzle() {
+                // Use PuzzleGenerator to create a valid puzzle
+                if (!this.puzzleGenerator) {
+                    this.puzzleGenerator = new PuzzleGenerator();
+                }
+                
+                try {
+                    const puzzleResult = this.puzzleGenerator.generateValidPuzzle(
+                        this.gridSystem.size,
+                        this.difficulty,
+                        this.seed,
+                        this.previousSeed // Pass previous seed to avoid for new games
+                    );
+                    
+                    // Update seed if it was changed by fallback mechanism
+                    if (puzzleResult.actualSeed !== this.seed) {
+                        this.seed = puzzleResult.actualSeed;
+                    }
+                    
+                    // Clear the current grid
+                    this.gridSystem = new GridSystem(this.gridSystem.size);
+                    this.ruleValidator = new RuleValidator(this.gridSystem);
+                    
+                    // Apply the generated puzzle state
+                    this.applyPuzzleState(puzzleResult.gridState, puzzleResult.constraints);
+                    
+                } catch (error) {
+                    console.warn('Puzzle generation failed, using fallback:', error.message);
+                    // Fallback to basic puzzle generation
+                    this.initializeFallbackPuzzle();
+                }
+                
+                // Store initial puzzle state for reset functionality
+                this.storeInitialPuzzleState();
+            }
+
+            /**
+             * Applies generated puzzle state to the grid system
+             */
+            applyPuzzleState(gridState, constraints) {
+                // Apply grid state
+                for (let row = 0; row < gridState.length; row++) {
+                    for (let col = 0; col < gridState[row].length; col++) {
+                        const cell = gridState[row][col];
+                        if (cell.immutable && cell.value) {
+                            this.gridSystem.setImmutable(row, col, cell.value);
+                        }
+                    }
+                }
+                
+                // Apply constraints
+                constraints.forEach(constraint => {
+                    this.gridSystem.addConstraint(
+                        constraint.cell1.row, constraint.cell1.col,
+                        constraint.cell2.row, constraint.cell2.col,
+                        constraint.type
+                    );
+                });
+            }
+
+            /**
+             * Fallback puzzle generation for error cases
+             */
+            initializeFallbackPuzzle() {
+                const size = this.gridSystem.size;
+                
+                // Place minimal safe clues with proper spacing
+                if (size >= 4) {
+                    // Place corners with alternating pattern
+                    this.gridSystem.setImmutable(0, 1, 'orange');
+                    this.gridSystem.setImmutable(1, 0, 'moon');
+                    if (size >= 6) {
+                        this.gridSystem.setImmutable(2, 3, 'orange');
+                        this.gridSystem.setImmutable(3, 2, 'moon');
+                    }
+                    this.gridSystem.setImmutable(size - 2, size - 1, 'moon');
+                    this.gridSystem.setImmutable(size - 1, size - 2, 'orange');
+                }
+                
+                // Add basic constraints with safe positions
+                if (size >= 4) {
+                    this.gridSystem.addConstraint(0, 0, 0, 2, 'notequal');
+                    if (size >= 6) {
+                        this.gridSystem.addConstraint(1, 1, 1, 2, 'equal');
+                        this.gridSystem.addConstraint(2, 0, 3, 0, 'notequal');
+                    }
+                }
+            }
+            
+            storeInitialPuzzleState() {
+                // Deep copy the grid and constraints to preserve initial state
+                this.initialPuzzleState = {
+                    grid: JSON.parse(JSON.stringify(this.gridSystem.grid)),
+                    constraints: this.gridSystem.getConstraints().map(c => ({ ...c }))
+                };
+            }
+
+            startGame() {
+                if (this.gameState === 'ready') {
+                    this.gameState = 'playing';
+                    this.startTimer();
+                    return true;
+                }
+                return false;
+            }
+
+            resetGame() {
+                this.gameState = 'ready';
+                this.resetTimer();
+                this.clearMoveHistory();
+                this.restoreInitialPuzzleState();
+            }
+            
+            restoreInitialPuzzleState() {
+                if (!this.initialPuzzleState) {
+                    // Fallback: if no initial state stored, reinitialize
+                    this.gridSystem.clear();
+                    this.initializePuzzle();
+                    return;
+                }
+                
+                // Restore grid to initial state
+                const initialGrid = this.initialPuzzleState.grid;
+                for (let row = 0; row < this.gridSystem.size; row++) {
+                    for (let col = 0; col < this.gridSystem.size; col++) {
+                        const initialCell = initialGrid[row][col];
+                        const currentCell = this.gridSystem.grid[row][col];
+                        
+                        // Restore cell values and immutable status
+                        currentCell.value = initialCell.value;
+                        currentCell.immutable = initialCell.immutable;
+                    }
+                }
+                
+                // Restore constraints 
+                this.gridSystem.constraints.clear();
+                this.initialPuzzleState.constraints.forEach(constraint => {
+                    const constraintId = `${constraint.cell1.row},${constraint.cell1.col}-${constraint.cell2.row},${constraint.cell2.col}`;
+                    this.gridSystem.constraints.set(constraintId, { ...constraint });
+                });
+            }
+
+            newGame(size = null, difficulty = null, customSeed = null) {
+                this.gridSystem = new GridSystem(size || this.gridSystem.size);
+                this.ruleValidator = new RuleValidator(this.gridSystem);
+                this.difficulty = difficulty || this.difficulty;
+                
+                // Store current seed for comparison
+                const previousSeed = this.seed;
+                
+                // Use custom seed if provided, otherwise generate random seed
+                if (customSeed && customSeed.trim()) {
+                    this.seed = customSeed.trim().toUpperCase();
+                    this.previousSeed = null; // No need to avoid specific seed
+                } else {
+                    this.seed = this.generateSeed();
+                    this.previousSeed = previousSeed; // Store to avoid duplicate
+                }
+                
+                this.gameState = 'ready';
+                this.resetTimer();
+                this.clearMoveHistory();
+                this.initializePuzzle();
+                
+                // Auto-update UI if we're in browser environment
+                if (typeof updateUI === 'function') {
+                    updateUI();
+                }
+            }
+
+            makeMove(row, col, value) {
+                if (this.gameState !== 'playing' && this.gameState !== 'ready') {
+                    return { success: false, reason: 'Game not active' };
+                }
+
+                if (this.gameState === 'ready') {
+                    this.startGame();
+                }
+
+                const previousValue = this.gridSystem.getCell(row, col)?.value;
+                const success = this.gridSystem.setCell(row, col, value);
+                
+                if (success) {
+                    this.recordMove(row, col, previousValue, value);
+                    
+                    if (this.isGameCompleted()) {
+                        this.completeGame();
+                    }
+                    
+                    return { 
+                        success: true, 
+                        gameState: this.gameState,
+                        isValid: this.ruleValidator.isValid(),
+                        errors: this.ruleValidator.getErrorCells()
+                    };
+                }
+                
+                return { success: false, reason: 'Invalid move' };
+            }
+
+            recordMove(row, col, previousValue, newValue) {
+                this.moveHistory = this.moveHistory.slice(0, this.currentMoveIndex + 1);
+                this.moveHistory.push({
+                    row, col, previousValue, newValue, timestamp: Date.now()
+                });
+                this.currentMoveIndex++;
+            }
+
+            undo() {
+                if (this.currentMoveIndex >= 0) {
+                    const move = this.moveHistory[this.currentMoveIndex];
+                    const success = this.gridSystem.setCell(move.row, move.col, move.previousValue);
+                    
+                    if (success) {
+                        this.currentMoveIndex--;
+                        return {
+                            success: true,
+                            move: move,
+                            canUndo: this.currentMoveIndex >= 0,
+                            canRedo: this.currentMoveIndex < this.moveHistory.length - 1
+                        };
+                    }
+                }
+                
+                return { success: false, reason: 'No moves to undo' };
+            }
+
+            redo() {
+                if (this.currentMoveIndex < this.moveHistory.length - 1) {
+                    this.currentMoveIndex++;
+                    const move = this.moveHistory[this.currentMoveIndex];
+                    const success = this.gridSystem.setCell(move.row, move.col, move.newValue);
+                    
+                    if (success) {
+                        return {
+                            success: true,
+                            move: move,
+                            canUndo: this.currentMoveIndex >= 0,
+                            canRedo: this.currentMoveIndex < this.moveHistory.length - 1
+                        };
+                    }
+                }
+                
+                return { success: false, reason: 'No moves to redo' };
+            }
+
+            clearMoveHistory() {
+                this.moveHistory = [];
+                this.currentMoveIndex = -1;
+            }
+
+            startTimer() {
+                if (!this.timer.isRunning) {
+                    this.timer.startTime = Date.now() - this.timer.elapsedTime;
+                    this.timer.isRunning = true;
+                }
+            }
+
+            pauseTimer() {
+                if (this.timer.isRunning) {
+                    this.timer.elapsedTime = Date.now() - this.timer.startTime;
+                    this.timer.isRunning = false;
+                }
+            }
+
+            resetTimer() {
+                this.timer.startTime = null;
+                this.timer.elapsedTime = 0;
+                this.timer.isRunning = false;
+            }
+
+            getElapsedTime() {
+                if (this.timer.isRunning) {
+                    return Date.now() - this.timer.startTime;
+                }
+                return this.timer.elapsedTime;
+            }
+
+            formatTime(milliseconds = null) {
+                const time = milliseconds !== null ? milliseconds : this.getElapsedTime();
+                const totalSeconds = Math.floor(time / 1000);
+                const minutes = Math.floor(totalSeconds / 60);
+                const seconds = totalSeconds % 60;
+                const centiseconds = Math.floor((time % 1000) / 10);
+                
+                return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
+            }
+
+            isGameCompleted() {
+                const grid = this.gridSystem.grid;
+                const size = this.gridSystem.size;
+                
+                for (let row = 0; row < size; row++) {
+                    for (let col = 0; col < size; col++) {
+                        if (grid[row][col].value === null) {
+                            return false;
+                        }
+                    }
+                }
+                
+                return this.ruleValidator.isValid();
+            }
+
+            completeGame() {
+                this.gameState = 'completed';
+                this.pauseTimer();
+                return {
+                    completed: true,
+                    time: this.getElapsedTime(),
+                    formattedTime: this.formatTime(),
+                    moves: this.moveHistory.length,
+                    difficulty: this.difficulty,
+                    size: this.gridSystem.size,
+                    seed: this.seed
+                };
+            }
+
+            getHint() {
+                if (this.gameState !== 'playing') {
+                    return { success: false, reason: 'Game not active' };
+                }
+
+                const grid = this.gridSystem.grid;
+                const size = this.gridSystem.size;
+                
+                for (let row = 0; row < size; row++) {
+                    for (let col = 0; col < size; col++) {
+                        if (grid[row][col].value === null && !grid[row][col].immutable) {
+                            const hint = this.calculateHint(row, col);
+                            if (hint) {
+                                return {
+                                    success: true,
+                                    row, col,
+                                    suggestedValue: hint,
+                                    reason: 'Based on current constraints'
+                                };
+                            }
+                        }
+                    }
+                }
+                
+                return { success: false, reason: 'No obvious hints available' };
+            }
+
+            calculateHint(row, col) {
+                const constraints = this.gridSystem.getConstraints();
+                
+                for (const constraint of constraints) {
+                    if ((constraint.cell1.row === row && constraint.cell1.col === col) ||
+                        (constraint.cell2.row === row && constraint.cell2.col === col)) {
+                        
+                        const otherCell = constraint.cell1.row === row && constraint.cell1.col === col ?
+                            constraint.cell2 : constraint.cell1;
+                        
+                        const otherValue = this.gridSystem.getCell(otherCell.row, otherCell.col).value;
+                        
+                        if (otherValue !== null) {
+                            if (constraint.type === 'equal') {
+                                return otherValue;
+                            } else if (constraint.type === 'notequal') {
+                                return otherValue === 'orange' ? 'moon' : 'orange';
+                            }
+                        }
+                    }
+                }
+                
+                return null;
+            }
+
+            serialize() {
+                return {
+                    gridState: this.gridSystem.serialize(),
+                    gameState: this.gameState,
+                    difficulty: this.difficulty,
+                    seed: this.seed,
+                    timer: { ...this.timer },
+                    moveHistory: [...this.moveHistory],
+                    currentMoveIndex: this.currentMoveIndex
+                };
+            }
+
+            deserialize(data) {
+                this.gridSystem.deserialize(data.gridState);
+                this.ruleValidator = new RuleValidator(this.gridSystem);
+                this.gameState = data.gameState;
+                this.difficulty = data.difficulty;
+                this.seed = data.seed;
+                this.timer = { ...data.timer };
+                this.moveHistory = [...data.moveHistory];
+                this.currentMoveIndex = data.currentMoveIndex;
+            }
+        }
+
+        /**
+         * PuzzleValidator Class - Validates puzzle solvability and uniqueness
+         * Ensures generated puzzles have exactly one solution via deduction
+         */
+        class PuzzleValidator {
+            constructor(gridSystem) {
+                this.gridSystem = gridSystem;
+            }
+
+            /**
+             * Validates that a puzzle has exactly one solution
+             * @returns {Object} { isValid: boolean, solutionCount: number, errors: Array }
+             */
+            validatePuzzle() {
+                const solutions = this.findAllSolutions();
+                const isValid = solutions.length === 1 && this.hasValidStructure();
+                
+                return {
+                    isValid,
+                    solutionCount: solutions.length,
+                    hasUniqueSolution: solutions.length === 1,
+                    errors: isValid ? [] : this.getValidationErrors(solutions.length)
+                };
+            }
+
+            /**
+             * Finds all possible solutions using backtracking
+             * @returns {Array} Array of solution grids
+             */
+            findAllSolutions() {
+                const grid = JSON.parse(JSON.stringify(this.gridSystem.grid));
+                const constraints = this.gridSystem.getConstraints();
+                const solutions = [];
+                
+                this.solveRecursive(grid, 0, 0, constraints, solutions);
+                return solutions;
+            }
+
+            /**
+             * Recursive backtracking solver
+             */
+            solveRecursive(grid, row, col, constraints, solutions) {
+                // Limit to prevent excessive computation
+                if (solutions.length >= 3) return;
+                
+                const size = grid.length;
+                
+                // Find next empty cell
+                while (row < size) {
+                    while (col < size && (grid[row][col].immutable || grid[row][col].value !== null)) {
+                        col++;
+                    }
+                    if (col < size) break;
+                    row++;
+                    col = 0;
+                }
+                
+                // If no empty cell found, check if solution is complete and valid
+                if (row >= size) {
+                    if (this.isGridComplete(grid) && this.isGridValid(grid, constraints)) {
+                        solutions.push(JSON.parse(JSON.stringify(grid)));
+                    }
+                    return;
+                }
+                
+                // Try both values
+                for (const value of ['orange', 'moon']) {
+                    grid[row][col].value = value;
+                    
+                    if (this.isPartiallyValid(grid, row, col, constraints)) {
+                        this.solveRecursive(grid, row, col + 1, constraints, solutions);
+                    }
+                    
+                    grid[row][col].value = null;
+                }
+            }
+
+            /**
+             * Checks if grid is completely filled
+             */
+            isGridComplete(grid) {
+                for (let row = 0; row < grid.length; row++) {
+                    for (let col = 0; col < grid[row].length; col++) {
+                        if (grid[row][col].value === null) return false;
+                    }
+                }
+                return true;
+            }
+
+            /**
+             * Validates grid against all rules
+             */
+            isGridValid(grid, constraints) {
+                return this.checkAdjacentLimits(grid) && 
+                       this.checkBalance(grid) && 
+                       this.checkConstraints(grid, constraints);
+            }
+
+            /**
+             * Checks if partial placement is valid (for optimization)
+             */
+            isPartiallyValid(grid, row, col, constraints) {
+                // Check adjacent limits around placed cell
+                if (!this.checkAdjacentAtPosition(grid, row, col)) return false;
+                
+                // Check constraints that involve this cell
+                return this.checkConstraintsAtPosition(grid, row, col, constraints);
+            }
+
+            /**
+             * Checks adjacent limits rule
+             */
+            checkAdjacentLimits(grid) {
+                const size = grid.length;
+                
+                for (let row = 0; row < size; row++) {
+                    for (let col = 0; col < size; col++) {
+                        if (!this.checkAdjacentAtPosition(grid, row, col)) return false;
+                    }
+                }
+                return true;
+            }
+
+            /**
+             * Checks adjacent limits at specific position
+             */
+            checkAdjacentAtPosition(grid, row, col) {
+                const size = grid.length;
+                const cell = grid[row][col];
+                if (!cell.value) return true;
+                
+                // Check horizontal
+                let hCount = 1;
+                // Count left
+                for (let c = col - 1; c >= 0 && grid[row][c].value === cell.value; c--) hCount++;
+                // Count right  
+                for (let c = col + 1; c < size && grid[row][c].value === cell.value; c++) hCount++;
+                if (hCount > 2) return false;
+                
+                // Check vertical
+                let vCount = 1;
+                // Count up
+                for (let r = row - 1; r >= 0 && grid[r][col].value === cell.value; r--) vCount++;
+                // Count down
+                for (let r = row + 1; r < size && grid[r][col].value === cell.value; r++) vCount++;
+                if (vCount > 2) return false;
+                
+                return true;
+            }
+
+            /**
+             * Checks balance constraint (equal orange and moon in each row/column)
+             */
+            checkBalance(grid) {
+                const size = grid.length;
+                
+                // Check rows
+                for (let row = 0; row < size; row++) {
+                    let orangeCount = 0, moonCount = 0;
+                    for (let col = 0; col < size; col++) {
+                        if (grid[row][col].value === 'orange') orangeCount++;
+                        else if (grid[row][col].value === 'moon') moonCount++;
+                    }
+                    if (orangeCount !== moonCount) return false;
+                }
+                
+                // Check columns
+                for (let col = 0; col < size; col++) {
+                    let orangeCount = 0, moonCount = 0;
+                    for (let row = 0; row < size; row++) {
+                        if (grid[row][col].value === 'orange') orangeCount++;
+                        else if (grid[row][col].value === 'moon') moonCount++;
+                    }
+                    if (orangeCount !== moonCount) return false;
+                }
+                
+                return true;
+            }
+
+            /**
+             * Checks constraint relationships
+             */
+            checkConstraints(grid, constraints) {
+                return constraints.every(constraint => {
+                    const cell1 = grid[constraint.cell1.row][constraint.cell1.col];
+                    const cell2 = grid[constraint.cell2.row][constraint.cell2.col];
+                    
+                    // Only check if both cells have values
+                    if (!cell1.value || !cell2.value) return true;
+                    
+                    if (constraint.type === 'equal') {
+                        return cell1.value === cell2.value;
+                    } else if (constraint.type === 'notequal') {
+                        return cell1.value !== cell2.value;
+                    }
+                    return true;
+                });
+            }
+
+            /**
+             * Checks constraints at specific position
+             */
+            checkConstraintsAtPosition(grid, row, col, constraints) {
+                return constraints.every(constraint => {
+                    // Check if this constraint involves the current cell
+                    const involvesCell = (constraint.cell1.row === row && constraint.cell1.col === col) ||
+                                       (constraint.cell2.row === row && constraint.cell2.col === col);
+                    
+                    if (!involvesCell) return true;
+                    
+                    const cell1 = grid[constraint.cell1.row][constraint.cell1.col];
+                    const cell2 = grid[constraint.cell2.row][constraint.cell2.col];
+                    
+                    // Only check if both cells have values
+                    if (!cell1.value || !cell2.value) return true;
+                    
+                    if (constraint.type === 'equal') {
+                        return cell1.value === cell2.value;
+                    } else if (constraint.type === 'notequal') {
+                        return cell1.value !== cell2.value;
+                    }
+                    return true;
+                });
+            }
+
+            /**
+             * Checks if puzzle has valid structure (basic requirements)
+             */
+            hasValidStructure() {
+                const grid = this.gridSystem.grid;
+                const size = grid.length;
+                
+                // Must be even size for balance
+                if (size % 2 !== 0) return false;
+                
+                // Must have some immutable cells but not all
+                let immutableCount = 0;
+                for (let row = 0; row < size; row++) {
+                    for (let col = 0; col < size; col++) {
+                        if (grid[row][col].immutable) immutableCount++;
+                    }
+                }
+                
+                return immutableCount > 0 && immutableCount < size * size;
+            }
+
+            /**
+             * Gets validation error descriptions
+             */
+            getValidationErrors(solutionCount) {
+                const errors = [];
+                
+                if (solutionCount === 0) {
+                    errors.push('Puzzle has no solution');
+                } else if (solutionCount > 1) {
+                    errors.push(`Puzzle has ${solutionCount} solutions (expected exactly 1)`);
+                }
+                
+                if (!this.hasValidStructure()) {
+                    errors.push('Invalid puzzle structure');
+                }
+                
+                return errors;
+            }
+        }
+
+        /**
+         * PuzzleGenerator Class - Generates valid puzzles with predefined library
+         * Ensures all generated puzzles are solvable with unique solutions
+         */
+        class PuzzleGenerator {
+            constructor() {
+                this.predefinedGrids = this.initializePredefinedGrids();
+            }
+
+            /**
+             * Generates a complete valid solution for a grid
+             * This is the foundation for creating puzzles
+             */
+            generateCompleteSolution(size, seed = null, random = null) {
+                if (!random) {
+                    random = seed ? this.createSeededRandom(seed) : Math.random;
+                }
+                const grid = this.createEmptyGrid(size);
+                
+                // Pre-generate deterministic choices for each cell to ensure reproducibility
+                // This prevents backtracking from causing different random consumption
+                const cellChoices = [];
+                for (let row = 0; row < size; row++) {
+                    cellChoices[row] = [];
+                    for (let col = 0; col < size; col++) {
+                        // Pre-determine value order for this cell
+                        const useOrangeFirst = random() > 0.5;
+                        cellChoices[row][col] = useOrangeFirst ? ['orange', 'moon'] : ['moon', 'orange'];
+                    }
+                }
+                
+                // Use backtracking to fill the entire grid following Tango rules
+                if (this.fillGridWithSolution(grid, 0, 0, cellChoices)) {
+                    return grid;
+                }
+                
+                throw new Error('Failed to generate complete solution');
+            }
+
+            /**
+             * Fills grid using backtracking while following Tango rules
+             */
+            fillGridWithSolution(grid, row, col, cellChoices) {
+                const size = grid.length;
+                
+                // If we've filled all cells, check if the solution is valid
+                if (row >= size) {
+                    return this.isValidCompleteSolution(grid);
+                }
+                
+                // Move to next row if we've completed current row
+                if (col >= size) {
+                    return this.fillGridWithSolution(grid, row + 1, 0, cellChoices);
+                }
+                
+                // Use pre-determined value order for this cell
+                const values = cellChoices[row][col];
+                
+                for (const value of values) {
+                    grid[row][col] = { value, immutable: false };
+                    
+                    // Check if this placement is valid so far
+                    if (this.isValidPartialPlacement(grid, row, col)) {
+                        if (this.fillGridWithSolution(grid, row, col + 1, cellChoices)) {
+                            return true;
+                        }
+                    }
+                }
+                
+                // Backtrack
+                grid[row][col] = { value: null, immutable: false };
+                return false;
+            }
+
+            /**
+             * Checks if a partial placement is valid (doesn't violate rules)
+             */
+            isValidPartialPlacement(grid, row, col) {
+                const size = grid.length;
+                const cellValue = grid[row][col].value;
+                
+                // Check adjacency rule (no more than 2 consecutive)
+                
+                // Horizontal check
+                let consecutiveHorizontal = 1;
+                // Count left
+                for (let c = col - 1; c >= 0 && grid[row][c].value === cellValue; c--) {
+                    consecutiveHorizontal++;
+                }
+                // Count right  
+                for (let c = col + 1; c < size && grid[row][c].value === cellValue; c++) {
+                    consecutiveHorizontal++;
+                }
+                if (consecutiveHorizontal > 2) return false;
+                
+                // Vertical check
+                let consecutiveVertical = 1;
+                // Count up
+                for (let r = row - 1; r >= 0 && grid[r][col].value === cellValue; r--) {
+                    consecutiveVertical++;
+                }
+                // Count down
+                for (let r = row + 1; r < size && grid[r][col].value === cellValue; r++) {
+                    consecutiveVertical++;
+                }
+                if (consecutiveVertical > 2) return false;
+                
+                // Check balance rule for completed rows/columns
+                // Row balance check
+                let rowOrangeCount = 0, rowMoonCount = 0;
+                let rowComplete = true;
+                for (let c = 0; c < size; c++) {
+                    const val = grid[row][c].value;
+                    if (!val) {
+                        rowComplete = false;
+                    } else if (val === 'orange') {
+                        rowOrangeCount++;
+                    } else if (val === 'moon') {
+                        rowMoonCount++;
+                    }
+                }
+                
+                // If row has too many of one type already, it's invalid
+                const maxPerRow = size / 2;
+                if (rowOrangeCount > maxPerRow || rowMoonCount > maxPerRow) return false;
+                
+                // Column balance check
+                let colOrangeCount = 0, colMoonCount = 0;
+                let colComplete = true;
+                for (let r = 0; r < size; r++) {
+                    const val = grid[r][col].value;
+                    if (!val) {
+                        colComplete = false;
+                    } else if (val === 'orange') {
+                        colOrangeCount++;
+                    } else if (val === 'moon') {
+                        colMoonCount++;
+                    }
+                }
+                
+                if (colOrangeCount > maxPerRow || colMoonCount > maxPerRow) return false;
+                
+                return true;
+            }
+
+            /**
+             * Validates a complete solution follows all Tango rules
+             */
+            isValidCompleteSolution(grid) {
+                const size = grid.length;
+                const expectedCount = size / 2;
+                
+                // Check adjacency and balance rules
+                for (let row = 0; row < size; row++) {
+                    let rowOrange = 0, rowMoon = 0;
+                    
+                    for (let col = 0; col < size; col++) {
+                        const cell = grid[row][col];
+                        if (cell.value === 'orange') rowOrange++;
+                        if (cell.value === 'moon') rowMoon++;
+                        
+                        // Check adjacency
+                        if (col < size - 2) {
+                            const val1 = grid[row][col].value;
+                            const val2 = grid[row][col + 1].value;
+                            const val3 = grid[row][col + 2].value;
+                            if (val1 === val2 && val2 === val3) return false;
+                        }
+                        
+                        if (row < size - 2) {
+                            const val1 = grid[row][col].value;
+                            const val2 = grid[row + 1][col].value;
+                            const val3 = grid[row + 2][col].value;
+                            if (val1 === val2 && val2 === val3) return false;
+                        }
+                    }
+                    
+                    // Check row balance
+                    if (rowOrange !== expectedCount || rowMoon !== expectedCount) return false;
+                }
+                
+                // Check column balance
+                for (let col = 0; col < size; col++) {
+                    let colOrange = 0, colMoon = 0;
+                    for (let row = 0; row < size; row++) {
+                        const cell = grid[row][col];
+                        if (cell.value === 'orange') colOrange++;
+                        if (cell.value === 'moon') colMoon++;
+                    }
+                    if (colOrange !== expectedCount || colMoon !== expectedCount) return false;
+                }
+                
+                return true;
+            }
+
+            /**
+             * Creates a puzzle by removing cells from a complete solution
+             */
+            createPuzzleFromSolution(completeSolution, difficulty, random = Math.random) {
+                const size = completeSolution.length;
+                const puzzle = JSON.parse(JSON.stringify(completeSolution)); // Deep copy
+                
+                // Determine how many cells to remove based on difficulty
+                const totalCells = size * size;
+                let cellsToRemove;
+                switch (difficulty.toLowerCase()) {
+                    case 'easy': cellsToRemove = Math.floor(totalCells * 0.4); break; // 40% removed
+                    case 'medium': cellsToRemove = Math.floor(totalCells * 0.6); break; // 60% removed  
+                    case 'hard': cellsToRemove = Math.floor(totalCells * 0.75); break; // 75% removed
+                    default: cellsToRemove = Math.floor(totalCells * 0.5); break;
+                }
+                
+                // Get list of all positions
+                const positions = [];
+                for (let row = 0; row < size; row++) {
+                    for (let col = 0; col < size; col++) {
+                        positions.push({ row, col });
+                    }
+                }
+                
+                // Shuffle positions using seeded random for deterministic results
+                for (let i = positions.length - 1; i > 0; i--) {
+                    const j = Math.floor(random() * (i + 1));
+                    [positions[i], positions[j]] = [positions[j], positions[i]];
+                }
+                
+                // Remove cells one by one, ensuring puzzle remains solvable
+                let removed = 0;
+                for (const pos of positions) {
+                    if (removed >= cellsToRemove) break;
+                    
+                    // Try removing this cell
+                    const originalValue = puzzle[pos.row][pos.col].value;
+                    puzzle[pos.row][pos.col] = { value: null, immutable: false };
+                    
+                    // Test if puzzle still has unique solution
+                    if (this.hasUniqueSolution(puzzle)) {
+                        removed++;
+                    } else {
+                        // Restore the cell if removing it makes puzzle unsolvable or ambiguous
+                        puzzle[pos.row][pos.col] = { value: originalValue, immutable: false };
+                    }
+                }
+                
+                // Mark remaining cells as immutable (given clues)
+                for (let row = 0; row < size; row++) {
+                    for (let col = 0; col < size; col++) {
+                        if (puzzle[row][col].value) {
+                            puzzle[row][col].immutable = true;
+                        }
+                    }
+                }
+                
+                return { puzzle, solution: completeSolution };
+            }
+
+            /**
+             * Checks if a puzzle has exactly one unique solution
+             */
+            hasUniqueSolution(puzzle) {
+                const solutions = [];
+                const testGrid = JSON.parse(JSON.stringify(puzzle));
+                
+                this.findAllSolutions(testGrid, 0, 0, solutions, 2); // Stop after finding 2 solutions
+                return solutions.length === 1;
+            }
+
+            /**
+             * Finds all solutions to a puzzle (up to maxSolutions)
+             */
+            findAllSolutions(grid, row, col, solutions, maxSolutions) {
+                if (solutions.length >= maxSolutions) return;
+                
+                const size = grid.length;
+                
+                // Find next empty cell
+                while (row < size) {
+                    while (col < size && grid[row][col].value) {
+                        col++;
+                    }
+                    if (col < size) break;
+                    row++;
+                    col = 0;
+                }
+                
+                // If no empty cells, we found a solution
+                if (row >= size) {
+                    if (this.isValidCompleteSolution(grid)) {
+                        solutions.push(JSON.parse(JSON.stringify(grid)));
+                    }
+                    return;
+                }
+                
+                // Try both values
+                for (const value of ['orange', 'moon']) {
+                    grid[row][col] = { value, immutable: false };
+                    
+                    if (this.isValidPartialPlacement(grid, row, col)) {
+                        this.findAllSolutions(grid, row, col + 1, solutions, maxSolutions);
+                    }
+                    
+                    if (solutions.length >= maxSolutions) break;
+                }
+                
+                // Backtrack
+                grid[row][col] = { value: null, immutable: false };
+            }
+
+            /**
+             * Generates strategic constraints to help with puzzle solvability
+             */
+            generateStrategicConstraints(puzzle, solution, difficulty, random = Math.random) {
+                const size = puzzle.length;
+                const constraints = [];
+                
+                // Find positions where we can add helpful constraints
+                const emptyPositions = [];
+                for (let row = 0; row < size; row++) {
+                    for (let col = 0; col < size; col++) {
+                        if (!puzzle[row][col].value) {
+                            emptyPositions.push({ row, col });
+                        }
+                    }
+                }
+                
+                // Determine number of constraints based on difficulty
+                let maxConstraints;
+                switch (difficulty.toLowerCase()) {
+                    case 'easy': maxConstraints = Math.max(2, Math.floor(size * 0.5)); break;
+                    case 'medium': maxConstraints = Math.max(3, Math.floor(size * 0.7)); break;
+                    case 'hard': maxConstraints = Math.max(1, Math.floor(size * 0.3)); break;
+                    default: maxConstraints = 2; break;
+                }
+                
+                // Shuffle empty positions to add randomness
+                for (let i = emptyPositions.length - 1; i > 0; i--) {
+                    const j = Math.floor(random() * (i + 1));
+                    [emptyPositions[i], emptyPositions[j]] = [emptyPositions[j], emptyPositions[i]];
+                }
+                
+                // Add constraints between adjacent empty cells
+                let addedConstraints = 0;
+                for (const pos of emptyPositions) {
+                    if (addedConstraints >= maxConstraints) break;
+                    
+                    // Try to find adjacent empty cell
+                    const adjacentPositions = [
+                        { row: pos.row, col: pos.col + 1 }, // Right
+                        { row: pos.row + 1, col: pos.col }, // Down
+                    ];
+                    
+                    for (const adj of adjacentPositions) {
+                        if (addedConstraints >= maxConstraints) break;
+                        
+                        if (adj.row < size && adj.col < size && !puzzle[adj.row][adj.col].value) {
+                            // Both cells are empty, check what constraint would be helpful
+                            const sol1 = solution[pos.row][pos.col].value;
+                            const sol2 = solution[adj.row][adj.col].value;
+                            
+                            const constraintType = sol1 === sol2 ? 'equal' : 'notequal';
+                            
+                            constraints.push({
+                                cell1: { row: pos.row, col: pos.col },
+                                cell2: { row: adj.row, col: adj.col },
+                                type: constraintType
+                            });
+                            
+                            addedConstraints++;
+                        }
+                    }
+                }
+                
+                return constraints;
+            }
+
+            /**
+             * Generates a random seed string
+             */
+            generateRandomSeed() {
+                const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                let result = '';
+                for (let i = 0; i < 8; i++) {
+                    result += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                return result;
+            }
+
+            /**
+             * Generates a valid puzzle for given parameters
+             * @param {number} size - Grid size
+             * @param {string} difficulty - Difficulty level
+             * @param {string} seed - Random seed
+             * @returns {Object} { gridState, constraints, actualSeed }
+             */
+            generateValidPuzzle(size, difficulty, seed, currentSeed = null) {
+                // MODIFIED LOGIC: Try solution-first approach for all sizes (including 8x8 and 10x10)
+                
+                // Create seeded random function for deterministic generation (outside try/catch for scope)
+                const random = seed ? this.createSeededRandom(seed) : Math.random;
+                
+                try {
+                    console.log(`Generating puzzle using solution-first approach for ${size}x${size} ${difficulty}`);
+                    
+                    // Generate complete valid solution
+                    const completeSolution = this.generateCompleteSolution(size, seed, random);
+                    
+                    // Create puzzle by strategically removing cells (pass random function)
+                    const { puzzle, solution } = this.createPuzzleFromSolution(completeSolution, difficulty, random);
+                    
+                    // Generate some strategic constraints to help with solvability
+                    const constraints = this.generateStrategicConstraints(puzzle, solution, difficulty, random);
+                    
+                    return {
+                        gridState: puzzle,
+                        constraints: constraints,
+                        actualSeed: seed || this.generateRandomSeed(),
+                        solution: solution
+                    };
+                    
+                } catch (error) {
+                    console.warn(`Solution-first generation failed for ${size}x${size}: ${error.message}, falling back to predefined grids`);
+                    
+                    // Fallback to predefined grids only if solution-first fails
+                    return this.getFallbackPuzzle(size, difficulty, seed, currentSeed, random);
+                }
+            }
+
+            /**
+             * Attempts to generate a puzzle using the seed
+             */
+            attemptPuzzleGeneration(size, difficulty, seed) {
+                const random = this.createSeededRandom(seed);
+                const gridState = this.createEmptyGrid(size);
+                
+                // Add immutable cells based on difficulty
+                const clueCount = this.getClueCount(size, difficulty);
+                const positions = this.shufflePositions(size, random);
+                
+                // Place clues that don't violate rules
+                const placedClues = this.placeValidClues(gridState, positions, clueCount, random);
+                
+                // Generate constraints
+                const constraints = this.generateValidConstraints(gridState, size, random);
+                
+                return {
+                    gridState,
+                    constraints,
+                    actualSeed: seed
+                };
+            }
+
+            /**
+             * Creates empty grid structure
+             */
+            createEmptyGrid(size) {
+                const grid = [];
+                for (let row = 0; row < size; row++) {
+                    grid[row] = [];
+                    for (let col = 0; col < size; col++) {
+                        grid[row][col] = {
+                            value: null,
+                            immutable: false
+                        };
+                    }
+                }
+                return grid;
+            }
+
+            /**
+             * Places valid clues that don't violate adjacency rules
+             */
+            placeValidClues(grid, positions, clueCount, random) {
+                let placed = 0;
+                
+                for (const pos of positions) {
+                    if (placed >= clueCount) break;
+                    
+                    const value = random() > 0.5 ? 'orange' : 'moon';
+                    
+                    // Temporarily place the value
+                    grid[pos.row][pos.col].value = value;
+                    grid[pos.row][pos.col].immutable = true;
+                    
+                    // Check if it violates adjacency rules
+                    if (this.checkAdjacentAtPosition(grid, pos.row, pos.col)) {
+                        placed++;
+                    } else {
+                        // Remove if it causes violation
+                        grid[pos.row][pos.col].value = null;
+                        grid[pos.row][pos.col].immutable = false;
+                    }
+                }
+                
+                return placed;
+            }
+
+            /**
+             * Generates valid constraints between cells
+             */
+            generateValidConstraints(grid, size, random) {
+                const constraints = [];
+                const constraintCount = Math.floor(size * 0.7);
+                
+                for (let i = 0; i < constraintCount; i++) {
+                    const row = Math.floor(random() * size);
+                    const col = Math.floor(random() * (size - 1));
+                    const type = random() > 0.5 ? 'equal' : 'notequal';
+                    
+                    let constraint;
+                    if (random() > 0.5 && col < size - 1) {
+                        // Horizontal constraint
+                        constraint = {
+                            cell1: { row, col },
+                            cell2: { row, col: col + 1 },
+                            type
+                        };
+                    } else if (row < size - 1) {
+                        // Vertical constraint
+                        constraint = {
+                            cell1: { row, col },
+                            cell2: { row: row + 1, col },
+                            type
+                        };
+                    }
+                    
+                    if (constraint && !this.hasConflictingConstraint(constraints, constraint)) {
+                        constraints.push(constraint);
+                    }
+                }
+                
+                return constraints;
+            }
+
+            /**
+             * Checks if constraint conflicts with existing ones
+             */
+            hasConflictingConstraint(existingConstraints, newConstraint) {
+                return existingConstraints.some(existing => 
+                    (existing.cell1.row === newConstraint.cell1.row && existing.cell1.col === newConstraint.cell1.col &&
+                     existing.cell2.row === newConstraint.cell2.row && existing.cell2.col === newConstraint.cell2.col) ||
+                    (existing.cell1.row === newConstraint.cell2.row && existing.cell1.col === newConstraint.cell2.col &&
+                     existing.cell2.row === newConstraint.cell1.row && existing.cell2.col === newConstraint.cell1.col)
+                );
+            }
+
+            /**
+             * Gets fallback puzzle from predefined library
+             */
+            getFallbackPuzzle(size, difficulty, originalSeed, currentSeed = null, random = Math.random) {
+                const predefined = this.predefinedGrids[size] && this.predefinedGrids[size][difficulty];
+                
+                if (!predefined || predefined.length === 0) {
+                    // Generate basic valid puzzle as last resort
+                    return this.generateBasicValidPuzzle(size, difficulty, random);
+                }
+                
+                let index;
+                if (originalSeed && originalSeed.trim()) {
+                    // Use deterministic selection for provided seeds
+                    const seedHash = this.hashSeed(originalSeed);
+                    index = seedHash % predefined.length;
+                } else {
+                    // Use random selection for new games (no seed provided)
+                    // Ensure we don't select the same puzzle as currently playing
+                    let availableOptions = predefined;
+                    if (currentSeed && predefined.length > 1) {
+                        availableOptions = predefined.filter(p => p.seed !== currentSeed);
+                        console.log(`Excluding current seed ${currentSeed}, ${availableOptions.length}/${predefined.length} options available`);
+                    }
+                    
+                    if (availableOptions.length === 0) {
+                        // Fallback: if somehow all are excluded, use original list
+                        availableOptions = predefined;
+                    }
+                    
+                    const randomIndex = Math.floor(random() * availableOptions.length);
+                    const selected = availableOptions[randomIndex];
+                    console.log(`Selected predefined puzzle: ${selected.seed} (${randomIndex + 1}/${availableOptions.length} available options)`);
+                    
+                    return {
+                        gridState: JSON.parse(JSON.stringify(selected.grid)),
+                        constraints: JSON.parse(JSON.stringify(selected.constraints)),
+                        actualSeed: selected.seed
+                    };
+                }
+                
+                const selected = predefined[index];
+                console.log(`Selected predefined puzzle variant ${index + 1}/${predefined.length} for ${size}x${size} ${difficulty}`);
+                
+                return {
+                    gridState: JSON.parse(JSON.stringify(selected.grid)),
+                    constraints: JSON.parse(JSON.stringify(selected.constraints)),
+                    actualSeed: selected.seed
+                };
+            }
+
+            /**
+             * Generates a basic valid puzzle as last resort
+             */
+            generateBasicValidPuzzle(size, difficulty, random = Math.random) {
+                const grid = this.createEmptyGrid(size);
+                const constraints = [];
+                
+                // Place minimal clues in safe positions
+                const clueCount = Math.max(2, Math.floor(size * 0.2));
+                let placed = 0;
+                
+                for (let row = 0; row < size && placed < clueCount; row += 2) {
+                    for (let col = 0; col < size && placed < clueCount; col += 2) {
+                        grid[row][col] = {
+                            value: (row + col) % 2 === 0 ? 'orange' : 'moon',
+                            immutable: true
+                        };
+                        placed++;
+                    }
+                }
+                
+                return {
+                    gridState: grid,
+                    constraints,
+                    actualSeed: `BASIC${size}${difficulty.toUpperCase()}`.substring(0, 8)
+                };
+            }
+
+            /**
+             * Initialize predefined valid grids library
+             */
+            initializePredefinedGrids() {
+                return {
+                    4: {
+                        easy: [
+                            {
+                                seed: 'EASY4X4A',
+                                grid: this.createPredefinedGrid4x4Easy1(),
+                                constraints: this.createPredefinedConstraints4x4Easy1()
+                            }
+                        ],
+                        medium: [
+                            {
+                                seed: 'MED4X4AA',
+                                grid: this.createPredefinedGrid4x4Medium1(),
+                                constraints: this.createPredefinedConstraints4x4Medium1()
+                            }
+                        ],
+                        hard: [
+                            {
+                                seed: 'HARD4X4A',
+                                grid: this.createPredefinedGrid4x4Hard1(),
+                                constraints: this.createPredefinedConstraints4x4Hard1()
+                            }
+                        ]
+                    },
+                    6: {
+                        easy: [
+                            {
+                                seed: 'EASY6X6A',
+                                grid: this.createPredefinedGrid6x6Easy1(),
+                                constraints: this.createPredefinedConstraints6x6Easy1()
+                            },
+                            {
+                                seed: 'EASY6X6B',
+                                grid: this.createPredefinedGrid6x6Easy2(),
+                                constraints: this.createPredefinedConstraints6x6Easy2()
+                            },
+                            {
+                                seed: 'EASY6X6C',
+                                grid: this.createPredefinedGrid6x6Easy3(),
+                                constraints: this.createPredefinedConstraints6x6Easy3()
+                            }
+                        ],
+                        medium: [
+                            {
+                                seed: 'MED6X6AA',
+                                grid: this.createPredefinedGrid6x6Medium1(),
+                                constraints: this.createPredefinedConstraints6x6Medium1()
+                            },
+                            {
+                                seed: 'MED6X6BB',
+                                grid: this.createPredefinedGrid6x6Medium2(),
+                                constraints: this.createPredefinedConstraints6x6Medium2()
+                            },
+                            {
+                                seed: 'MED6X6CC',
+                                grid: this.createPredefinedGrid6x6Medium3(),
+                                constraints: this.createPredefinedConstraints6x6Medium3()
+                            }
+                        ],
+                        hard: [
+                            {
+                                seed: 'HARD6X6A',
+                                grid: this.createPredefinedGrid6x6Hard1(),
+                                constraints: this.createPredefinedConstraints6x6Hard1()
+                            },
+                            {
+                                seed: 'HARD6X6B',
+                                grid: this.createPredefinedGrid6x6Hard2(),
+                                constraints: this.createPredefinedConstraints6x6Hard2()
+                            },
+                            {
+                                seed: 'HARD6X6C',
+                                grid: this.createPredefinedGrid6x6Hard3(),
+                                constraints: this.createPredefinedConstraints6x6Hard3()
+                            }
+                        ]
+                    },
+                    8: {
+                        easy: [
+                            {
+                                seed: 'EASY8X8A',
+                                grid: this.createPredefinedGrid8x8Easy1(),
+                                constraints: this.createPredefinedConstraints8x8Easy1()
+                            }
+                        ],
+                        medium: [
+                            {
+                                seed: 'MED8X8AA',
+                                grid: this.createPredefinedGrid8x8Medium1(),
+                                constraints: this.createPredefinedConstraints8x8Medium1()
+                            }
+                        ],
+                        hard: [
+                            {
+                                seed: 'HARD8X8A',
+                                grid: this.createPredefinedGrid8x8Hard1(),
+                                constraints: this.createPredefinedConstraints8x8Hard1()
+                            }
+                        ]
+                    }
+                };
+            }
+
+            // Predefined Grid Creators (simplified valid configurations)
+            createPredefinedGrid4x4Easy1() {
+                return [
+                    [{ value: 'orange', immutable: true }, { value: null, immutable: false }, { value: null, immutable: false }, { value: null, immutable: false }],
+                    [{ value: null, immutable: false }, { value: null, immutable: false }, { value: 'orange', immutable: true }, { value: null, immutable: false }],
+                    [{ value: null, immutable: false }, { value: 'moon', immutable: true }, { value: null, immutable: false }, { value: null, immutable: false }],
+                    [{ value: null, immutable: false }, { value: null, immutable: false }, { value: null, immutable: false }, { value: 'moon', immutable: true }]
+                ];
+            }
+
+            createPredefinedConstraints4x4Easy1() {
+                return [
+                    { cell1: { row: 0, col: 1 }, cell2: { row: 0, col: 2 }, type: 'notequal' },
+                    { cell1: { row: 1, col: 0 }, cell2: { row: 2, col: 0 }, type: 'notequal' }
+                ];
+            }
+
+            createPredefinedGrid4x4Medium1() {
+                return [
+                    [{ value: null, immutable: false }, { value: 'orange', immutable: true }, { value: null, immutable: false }, { value: null, immutable: false }],
+                    [{ value: null, immutable: false }, { value: null, immutable: false }, { value: null, immutable: false }, { value: 'moon', immutable: true }],
+                    [{ value: 'moon', immutable: true }, { value: null, immutable: false }, { value: null, immutable: false }, { value: null, immutable: false }],
+                    [{ value: null, immutable: false }, { value: null, immutable: false }, { value: 'orange', immutable: true }, { value: null, immutable: false }]
+                ];
+            }
+
+            createPredefinedConstraints4x4Medium1() {
+                return [
+                    { cell1: { row: 0, col: 0 }, cell2: { row: 0, col: 2 }, type: 'equal' },
+                    { cell1: { row: 2, col: 1 }, cell2: { row: 2, col: 2 }, type: 'notequal' }
+                ];
+            }
+
+            createPredefinedGrid4x4Hard1() {
+                return [
+                    [{ value: null, immutable: false }, { value: null, immutable: false }, { value: 'moon', immutable: true }, { value: null, immutable: false }],
+                    [{ value: null, immutable: false }, { value: 'orange', immutable: true }, { value: null, immutable: false }, { value: null, immutable: false }],
+                    [{ value: null, immutable: false }, { value: null, immutable: false }, { value: 'orange', immutable: true }, { value: null, immutable: false }],
+                    [{ value: null, immutable: false }, { value: 'moon', immutable: true }, { value: null, immutable: false }, { value: null, immutable: false }]
+                ];
+            }
+
+            createPredefinedConstraints4x4Hard1() {
+                return [
+                    { cell1: { row: 0, col: 0 }, cell2: { row: 1, col: 0 }, type: 'notequal' },
+                    { cell1: { row: 0, col: 1 }, cell2: { row: 0, col: 3 }, type: 'equal' }
+                ];
+            }
+
+            // 6x6 grids
+            createPredefinedGrid6x6Easy1() {
+                const grid = this.createEmptyGrid(6);
+                // Place some strategic clues with safe spacing
+                grid[0][1] = { value: 'orange', immutable: true };
+                grid[0][4] = { value: 'moon', immutable: true };
+                grid[1][0] = { value: 'moon', immutable: true };
+                grid[1][3] = { value: 'orange', immutable: true };
+                grid[2][2] = { value: 'orange', immutable: true };
+                grid[2][5] = { value: 'moon', immutable: true };
+                grid[3][1] = { value: 'moon', immutable: true };
+                grid[3][4] = { value: 'orange', immutable: true };
+                grid[4][0] = { value: 'orange', immutable: true };
+                grid[4][3] = { value: 'moon', immutable: true };
+                grid[5][2] = { value: 'moon', immutable: true };
+                grid[5][5] = { value: 'orange', immutable: true };
+                return grid;
+            }
+
+            createPredefinedConstraints6x6Easy1() {
+                return [
+                    { cell1: { row: 0, col: 1 }, cell2: { row: 0, col: 2 }, type: 'notequal' },
+                    { cell1: { row: 1, col: 0 }, cell2: { row: 2, col: 0 }, type: 'equal' },
+                    { cell1: { row: 3, col: 3 }, cell2: { row: 3, col: 4 }, type: 'notequal' }
+                ];
+            }
+
+            createPredefinedGrid6x6Medium1() {
+                const grid = this.createEmptyGrid(6);
+                grid[0][2] = { value: 'orange', immutable: true };
+                grid[1][0] = { value: 'moon', immutable: true };
+                grid[1][5] = { value: 'orange', immutable: true };
+                grid[2][3] = { value: 'moon', immutable: true };
+                grid[3][1] = { value: 'orange', immutable: true };
+                grid[4][4] = { value: 'moon', immutable: true };
+                grid[5][0] = { value: 'orange', immutable: true };
+                return grid;
+            }
+
+            createPredefinedConstraints6x6Medium1() {
+                return [
+                    { cell1: { row: 0, col: 0 }, cell2: { row: 0, col: 1 }, type: 'equal' },
+                    { cell1: { row: 2, col: 1 }, cell2: { row: 2, col: 2 }, type: 'notequal' },
+                    { cell1: { row: 4, col: 2 }, cell2: { row: 5, col: 2 }, type: 'notequal' }
+                ];
+            }
+
+            createPredefinedGrid6x6Hard1() {
+                const grid = this.createEmptyGrid(6);
+                grid[1][1] = { value: 'orange', immutable: true };
+                grid[2][4] = { value: 'moon', immutable: true };
+                grid[3][0] = { value: 'moon', immutable: true };
+                grid[4][3] = { value: 'orange', immutable: true };
+                return grid;
+            }
+
+            createPredefinedConstraints6x6Hard1() {
+                return [
+                    { cell1: { row: 0, col: 0 }, cell2: { row: 1, col: 0 }, type: 'notequal' },
+                    { cell1: { row: 0, col: 2 }, cell2: { row: 0, col: 3 }, type: 'equal' }
+                ];
+            }
+
+            // Additional 6x6 Easy grids for variety
+            createPredefinedGrid6x6Easy2() {
+                const grid = this.createEmptyGrid(6);
+                // Different pattern for variety
+                grid[0][0] = { value: 'moon', immutable: true };
+                grid[0][5] = { value: 'orange', immutable: true };
+                grid[1][2] = { value: 'orange', immutable: true };
+                grid[2][1] = { value: 'moon', immutable: true };
+                grid[2][4] = { value: 'orange', immutable: true };
+                grid[3][0] = { value: 'orange', immutable: true };
+                grid[3][3] = { value: 'moon', immutable: true };
+                grid[4][2] = { value: 'moon', immutable: true };
+                grid[4][5] = { value: 'orange', immutable: true };
+                grid[5][1] = { value: 'orange', immutable: true };
+                grid[5][4] = { value: 'moon', immutable: true };
+                return grid;
+            }
+
+            createPredefinedConstraints6x6Easy2() {
+                return [
+                    { cell1: { row: 0, col: 1 }, cell2: { row: 0, col: 2 }, type: 'equal' },
+                    { cell1: { row: 1, col: 0 }, cell2: { row: 1, col: 1 }, type: 'notequal' },
+                    { cell1: { row: 2, col: 2 }, cell2: { row: 3, col: 2 }, type: 'notequal' },
+                    { cell1: { row: 4, col: 0 }, cell2: { row: 4, col: 1 }, type: 'equal' }
+                ];
+            }
+
+            createPredefinedGrid6x6Easy3() {
+                const grid = this.createEmptyGrid(6);
+                // Third pattern
+                grid[0][2] = { value: 'orange', immutable: true };
+                grid[1][1] = { value: 'moon', immutable: true };
+                grid[1][4] = { value: 'orange', immutable: true };
+                grid[2][0] = { value: 'orange', immutable: true };
+                grid[2][5] = { value: 'moon', immutable: true };
+                grid[3][2] = { value: 'moon', immutable: true };
+                grid[4][1] = { value: 'orange', immutable: true };
+                grid[4][4] = { value: 'moon', immutable: true };
+                grid[5][0] = { value: 'moon', immutable: true };
+                grid[5][3] = { value: 'orange', immutable: true };
+                return grid;
+            }
+
+            createPredefinedConstraints6x6Easy3() {
+                return [
+                    { cell1: { row: 0, col: 0 }, cell2: { row: 0, col: 1 }, type: 'notequal' },
+                    { cell1: { row: 1, col: 2 }, cell2: { row: 1, col: 3 }, type: 'equal' },
+                    { cell1: { row: 3, col: 0 }, cell2: { row: 3, col: 1 }, type: 'notequal' },
+                    { cell1: { row: 5, col: 1 }, cell2: { row: 5, col: 2 }, type: 'equal' }
+                ];
+            }
+
+            // Additional 6x6 Medium grids
+            createPredefinedGrid6x6Medium2() {
+                const grid = this.createEmptyGrid(6);
+                grid[0][1] = { value: 'moon', immutable: true };
+                grid[1][3] = { value: 'orange', immutable: true };
+                grid[2][0] = { value: 'orange', immutable: true };
+                grid[2][5] = { value: 'moon', immutable: true };
+                grid[3][2] = { value: 'moon', immutable: true };
+                grid[4][1] = { value: 'orange', immutable: true };
+                grid[5][4] = { value: 'moon', immutable: true };
+                return grid;
+            }
+
+            createPredefinedConstraints6x6Medium2() {
+                return [
+                    { cell1: { row: 0, col: 0 }, cell2: { row: 0, col: 2 }, type: 'notequal' },
+                    { cell1: { row: 1, col: 0 }, cell2: { row: 2, col: 0 }, type: 'notequal' },
+                    { cell1: { row: 3, col: 3 }, cell2: { row: 3, col: 4 }, type: 'equal' },
+                    { cell1: { row: 4, col: 2 }, cell2: { row: 5, col: 2 }, type: 'notequal' }
+                ];
+            }
+
+            createPredefinedGrid6x6Medium3() {
+                const grid = this.createEmptyGrid(6);
+                grid[0][4] = { value: 'orange', immutable: true };
+                grid[1][1] = { value: 'moon', immutable: true };
+                grid[2][2] = { value: 'orange', immutable: true };
+                grid[3][4] = { value: 'moon', immutable: true };
+                grid[4][0] = { value: 'moon', immutable: true };
+                grid[5][3] = { value: 'orange', immutable: true };
+                return grid;
+            }
+
+            createPredefinedConstraints6x6Medium3() {
+                return [
+                    { cell1: { row: 0, col: 0 }, cell2: { row: 0, col: 1 }, type: 'equal' },
+                    { cell1: { row: 1, col: 2 }, cell2: { row: 1, col: 3 }, type: 'notequal' },
+                    { cell1: { row: 2, col: 0 }, cell2: { row: 2, col: 1 }, type: 'notequal' },
+                    { cell1: { row: 4, col: 4 }, cell2: { row: 4, col: 5 }, type: 'equal' }
+                ];
+            }
+
+            // Additional 6x6 Hard grids
+            createPredefinedGrid6x6Hard2() {
+                const grid = this.createEmptyGrid(6);
+                grid[0][3] = { value: 'moon', immutable: true };
+                grid[2][1] = { value: 'orange', immutable: true };
+                grid[3][4] = { value: 'moon', immutable: true };
+                grid[5][0] = { value: 'orange', immutable: true };
+                return grid;
+            }
+
+            createPredefinedConstraints6x6Hard2() {
+                return [
+                    { cell1: { row: 0, col: 0 }, cell2: { row: 0, col: 1 }, type: 'notequal' },
+                    { cell1: { row: 1, col: 2 }, cell2: { row: 1, col: 3 }, type: 'equal' },
+                    { cell1: { row: 2, col: 0 }, cell2: { row: 3, col: 0 }, type: 'notequal' }
+                ];
+            }
+
+            createPredefinedGrid6x6Hard3() {
+                const grid = this.createEmptyGrid(6);
+                grid[1][0] = { value: 'orange', immutable: true };
+                grid[2][3] = { value: 'moon', immutable: true };
+                grid[4][1] = { value: 'moon', immutable: true };
+                grid[4][5] = { value: 'orange', immutable: true };
+                return grid;
+            }
+
+            createPredefinedConstraints6x6Hard3() {
+                return [
+                    { cell1: { row: 0, col: 1 }, cell2: { row: 0, col: 2 }, type: 'equal' },
+                    { cell1: { row: 1, col: 1 }, cell2: { row: 2, col: 1 }, type: 'notequal' },
+                    { cell1: { row: 3, col: 2 }, cell2: { row: 3, col: 3 }, type: 'notequal' }
+                ];
+            }
+
+            // 8x8 grids (simplified for space)
+            createPredefinedGrid8x8Easy1() {
+                const grid = this.createEmptyGrid(8);
+                // Place clues in safe positions
+                for (let i = 0; i < 8; i += 2) {
+                    grid[i][1] = { value: i % 4 === 0 ? 'orange' : 'moon', immutable: true };
+                    grid[i][5] = { value: i % 4 === 0 ? 'moon' : 'orange', immutable: true };
+                }
+                return grid;
+            }
+
+            createPredefinedConstraints8x8Easy1() {
+                return [
+                    { cell1: { row: 0, col: 0 }, cell2: { row: 0, col: 2 }, type: 'equal' },
+                    { cell1: { row: 2, col: 2 }, cell2: { row: 2, col: 3 }, type: 'notequal' }
+                ];
+            }
+
+            createPredefinedGrid8x8Medium1() {
+                const grid = this.createEmptyGrid(8);
+                // Sparse clue placement for medium difficulty
+                grid[1][2] = { value: 'orange', immutable: true };
+                grid[2][6] = { value: 'moon', immutable: true };
+                grid[4][1] = { value: 'moon', immutable: true };
+                grid[5][4] = { value: 'orange', immutable: true };
+                grid[6][7] = { value: 'moon', immutable: true };
+                return grid;
+            }
+
+            createPredefinedConstraints8x8Medium1() {
+                return [
+                    { cell1: { row: 0, col: 0 }, cell2: { row: 0, col: 1 }, type: 'notequal' },
+                    { cell1: { row: 3, col: 3 }, cell2: { row: 4, col: 3 }, type: 'equal' }
+                ];
+            }
+
+            createPredefinedGrid8x8Hard1() {
+                const grid = this.createEmptyGrid(8);
+                // Minimal clues for hard difficulty
+                grid[2][2] = { value: 'orange', immutable: true };
+                grid[3][5] = { value: 'moon', immutable: true };
+                grid[5][1] = { value: 'moon', immutable: true };
+                return grid;
+            }
+
+            createPredefinedConstraints8x8Hard1() {
+                return [
+                    { cell1: { row: 0, col: 0 }, cell2: { row: 1, col: 0 }, type: 'equal' },
+                    { cell1: { row: 1, col: 1 }, cell2: { row: 1, col: 2 }, type: 'notequal' }
+                ];
+            }
+
+            /**
+             * Utility methods
+             */
+            createSeededRandom(seed) {
+                // Create hash from seed string
+                let hash = 0;
+                for (let i = 0; i < seed.length; i++) {
+                    const char = seed.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash = hash & hash;
+                }
+                
+                // Always reset to the same initial state for this seed
+                // This ensures the same seed always produces the same sequence
+                const initialSeedState = Math.abs(hash);
+                
+                // Create a local PRNG state that starts fresh each time
+                let localSeedState = initialSeedState;
+                
+                // Return function that uses the local state (not global)
+                return () => {
+                    localSeedState = (localSeedState * 1664525 + 1013904223) % Math.pow(2, 32);
+                    return localSeedState / Math.pow(2, 32);
+                };
+            }
+
+            shufflePositions(size, random) {
+                const positions = [];
+                for (let row = 0; row < size; row++) {
+                    for (let col = 0; col < size; col++) {
+                        positions.push({ row, col });
+                    }
+                }
+                
+                for (let i = positions.length - 1; i > 0; i--) {
+                    const j = Math.floor(random() * (i + 1));
+                    [positions[i], positions[j]] = [positions[j], positions[i]];
+                }
+                
+                return positions;
+            }
+
+            getClueCount(size, difficulty) {
+                const totalCells = size * size;
+                const ranges = {
+                    'easy': { min: 0.35, max: 0.45 },
+                    'medium': { min: 0.2, max: 0.3 },
+                    'hard': { min: 0.1, max: 0.2 }
+                };
+                
+                const range = ranges[difficulty] || ranges['medium'];
+                return Math.floor(totalCells * ((range.min + range.max) / 2));
+            }
+
+            checkAdjacentAtPosition(grid, row, col) {
+                const size = grid.length;
+                const cell = grid[row][col];
+                if (!cell.value) return true;
+                
+                // Check horizontal
+                let hCount = 1;
+                for (let c = col - 1; c >= 0 && grid[row][c].value === cell.value; c--) hCount++;
+                for (let c = col + 1; c < size && grid[row][c].value === cell.value; c++) hCount++;
+                if (hCount > 2) return false;
+                
+                // Check vertical
+                let vCount = 1;
+                for (let r = row - 1; r >= 0 && grid[r][col].value === cell.value; r--) vCount++;
+                for (let r = row + 1; r < size && grid[r][col].value === cell.value; r++) vCount++;
+                if (vCount > 2) return false;
+                
+                return true;
+            }
+
+            applyPuzzleState(gridSystem, gridState, constraints) {
+                // Apply grid state
+                for (let row = 0; row < gridState.length; row++) {
+                    for (let col = 0; col < gridState[row].length; col++) {
+                        const cell = gridState[row][col];
+                        if (cell.immutable) {
+                            gridSystem.setImmutable(row, col, cell.value);
+                        }
+                    }
+                }
+                
+                // Apply constraints
+                constraints.forEach(constraint => {
+                    gridSystem.addConstraint(
+                        constraint.cell1.row, constraint.cell1.col,
+                        constraint.cell2.row, constraint.cell2.col,
+                        constraint.type
+                    );
+                });
+            }
+
+            hashSeed(seed) {
+                let hash = 0;
+                for (let i = 0; i < seed.length; i++) {
+                    hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+                    hash = hash & hash;
+                }
+                return Math.abs(hash);
+            }
+        }
+
+        /**
+         * ThemeManager Class - Manages appearance modes and icon themes
+         * Separates appearance (light/dark) from icon themes (symbols displayed)
+         */
+        class ThemeManager {
+            constructor() {
+                // Configuration: Default icon theme (easy to change)
+                // Available options: 'classic', 'fire-ice', 'black-white', 'day-night', 
+                // 'heart-mind', 'diamond-pearl', 'rabbit-turtle', 'bean'
+                this.DEFAULT_ICON_THEME = 'day-night'; // Change this to set different default theme
+                
+                this.currentIconTheme = this.DEFAULT_ICON_THEME;
+                this.appearanceMode = 'auto'; // 'light', 'dark', 'auto'
+                this.settings = {
+                    hapticFeedback: true,
+                    largeConstraints: false
+                };
+                this.iconThemes = this.initIconThemes();
+                this.appearanceModes = this.initAppearanceModes();
+                this.customIconThemes = new Map();
+                this.systemPreferenceListener = null;
+                
+                this.init();
+            }
+
+            /**
+             * Initialize theme system
+             */
+            init() {
+                this.loadSettings();
+                this.setupSystemPreferenceListener();
+                this.applyIconTheme(this.currentIconTheme);
+                this.applyAppearanceMode(this.appearanceMode);
+                this.applyAccessibilitySettings();
+            }
+
+            /**
+             * Initialize appearance modes
+             */
+            initAppearanceModes() {
+                return {
+                    'light': { name: 'Light', icon: '☀️', description: 'Light background' },
+                    'dark': { name: 'Dark', icon: '🌙', description: 'Dark background' },
+                    'auto': { name: 'Auto', icon: '📱', description: 'Follow system preference' }
+                };
+            }
+
+            /**
+             * Initialize built-in icon theme definitions
+             */
+            initIconThemes() {
+                return {
+                    'classic': {
+                        id: 'classic',
+                        name: 'Classic',
+                        description: 'Numbers 0 and 1',
+                        symbols: { primary: '0', secondary: '1' },
+                        preview: ['0', '1']
+                    },
+                    'fire-ice': {
+                        id: 'fire-ice',
+                        name: 'Fire & Ice',
+                        description: 'Snowflake and flame symbols',
+                        symbols: { primary: '❄️', secondary: '🔥' },
+                        preview: ['❄️', '🔥']
+                    },
+                    'black-white': {
+                        id: 'black-white',
+                        name: 'Black & White',
+                        description: 'Square symbols',
+                        symbols: { primary: '⬜', secondary: '⬛' },
+                        preview: ['⬜', '⬛']
+                    },
+                    'day-night': {
+                        id: 'day-night',
+                        name: 'Day & Night',
+                        description: 'Sun and moon symbols',
+                        symbols: { primary: '🌙', secondary: '☀️' },
+                        preview: ['🌙', '☀️']
+                    },
+                    'heart-mind': {
+                        id: 'heart-mind',
+                        name: 'Heart & Mind',
+                        description: 'Heart and brain symbols',
+                        symbols: { primary: '❤️', secondary: '🧠' },
+                        preview: ['❤️', '🧠']
+                    },
+                    'diamond-pearl': {
+                        id: 'diamond-pearl',
+                        name: 'Diamond & Pearl',
+                        description: 'Diamond and pearl symbols',
+                        symbols: { primary: '💎', secondary: '⭐' },
+                        preview: ['💎', '⭐']
+                    },
+                    'rabbit-turtle': {
+                        id: 'rabbit-turtle',
+                        name: 'Rabbit & Turtle',
+                        description: 'Rabbit and turtle symbols',
+                        symbols: { primary: '🐰', secondary: '🐢' },
+                        preview: ['🐰', '🐢']
+                    },
+                    'bean': {
+                        id: 'bean',
+                        name: 'Bean',
+                        description: 'Coffee bean symbols',
+                        symbols: { primary: '☕', secondary: '🫘' },
+                        preview: ['☕', '🫘']
+                    }
+                };
+            }
+
+            /**
+             * Load icon theme from built-in or custom icon themes
+             */
+            loadIconTheme(themeId) {
+                if (this.iconThemes[themeId]) {
+                    this.applyIconTheme(themeId);
+                    this.currentIconTheme = themeId;
+                    this.saveSettings();
+                    this.updateThemePreview();
+                    return true;
+                }
+
+                if (this.customIconThemes.has(themeId)) {
+                    this.applyCustomIconTheme(themeId);
+                    this.currentIconTheme = themeId;
+                    this.saveSettings();
+                    this.updateThemePreview();
+                    return true;
+                }
+
+                console.warn(`Icon theme '${themeId}' not found`);
+                return false;
+            }
+
+            /**
+             * Apply icon theme - changes symbols displayed in game cells
+             */
+            applyIconTheme(themeId) {
+                const iconTheme = this.iconThemes[themeId];
+                if (!iconTheme) return false;
+
+                // Set icon theme on body for CSS targeting
+                document.body.dataset.iconTheme = themeId;
+                
+                // Update all existing game cells with new symbols
+                this.updateGameCellSymbols(iconTheme);
+
+                // Update theme dropdown
+                const dropdown = document.querySelector('[data-testid="theme-dropdown"]');
+                if (dropdown) {
+                    dropdown.value = themeId;
+                }
+
+                return true;
+            }
+
+            /**
+             * Update all game cell symbols to match current icon theme
+             */
+            updateGameCellSymbols(iconTheme) {
+                const cells = document.querySelectorAll('.grid-cell[data-cell-value]');
+                cells.forEach(cell => {
+                    const value = cell.dataset.cellValue;
+                    if (value === 'orange') {
+                        cell.textContent = iconTheme.symbols.primary;
+                    } else if (value === 'moon') {
+                        cell.textContent = iconTheme.symbols.secondary;
+                    }
+                });
+
+                // Also update preview cells if modal is open
+                this.updatePreviewCells(iconTheme);
+            }
+
+            /**
+             * Update preview cells in theme modal
+             */
+            updatePreviewCells(iconTheme) {
+                const previewCells = document.querySelectorAll('.preview-cell');
+                if (previewCells.length >= 4) {
+                    // First row: primary and secondary symbols
+                    previewCells[0].textContent = iconTheme.symbols.primary;
+                    previewCells[1].textContent = iconTheme.symbols.secondary;
+                    // Second row: empty cell and primary symbol
+                    previewCells[2].textContent = ''; // Keep empty
+                    previewCells[3].textContent = iconTheme.symbols.primary;
+                }
+            }
+
+            /**
+             * Apply custom icon theme
+             */
+            applyCustomIconTheme(themeId) {
+                const customTheme = this.customIconThemes.get(themeId);
+                if (!customTheme) return false;
+
+                // Set icon theme on body for CSS targeting
+                document.body.dataset.iconTheme = themeId;
+                
+                // Update all existing game cells with new symbols
+                this.updateGameCellSymbols(customTheme);
+
+                return true;
+            }
+
+            /**
+             * Apply custom theme
+             */
+            applyCustomTheme(themeId) {
+                const customTheme = this.customThemes.get(themeId);
+                if (!customTheme) return false;
+
+                // Apply CSS custom properties
+                Object.entries(customTheme.properties).forEach(([property, value]) => {
+                    document.documentElement.style.setProperty(property, value);
+                });
+
+                document.body.dataset.theme = themeId;
+                return true;
+            }
+
+            /**
+             * Set appearance mode (light/dark/auto)
+             */
+            setAppearanceMode(mode) {
+                this.appearanceMode = mode;
+                this.applyAppearanceMode(mode);
+                this.saveSettings();
+                this.updateAppearanceButtons();
+            }
+
+            /**
+             * Apply appearance mode
+             */
+            applyAppearanceMode(mode) {
+                if (mode === 'auto') {
+                    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    document.body.dataset.appearance = prefersDark ? 'dark' : 'light';
+                } else {
+                    document.body.dataset.appearance = mode;
+                }
+            }
+
+            /**
+             * Setup system preference listener for auto mode
+             */
+            setupSystemPreferenceListener() {
+                if (this.systemPreferenceListener) {
+                    window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', this.systemPreferenceListener);
+                }
+
+                this.systemPreferenceListener = (e) => {
+                    if (this.appearanceMode === 'auto') {
+                        document.body.dataset.appearance = e.matches ? 'dark' : 'light';
+                    }
+                };
+
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', this.systemPreferenceListener);
+            }
+
+            /**
+             * Toggle haptic feedback
+             */
+            toggleHapticFeedback(enabled) {
+                this.settings.hapticFeedback = enabled;
+                this.saveSettings();
+                
+                // Update UI
+                const toggle = document.querySelector('#haptic-toggle');
+                if (toggle) {
+                    toggle.checked = enabled;
+                }
+            }
+
+            /**
+             * Trigger haptic feedback if enabled
+             */
+            triggerHapticFeedback(type = 'light') {
+                if (!this.settings.hapticFeedback || !navigator.vibrate) return;
+
+                const vibrationMap = {
+                    light: 10,
+                    medium: 20,
+                    heavy: 50
+                };
+
+                navigator.vibrate(vibrationMap[type] || 10);
+            }
+
+            /**
+             * Toggle large constraint icons
+             */
+            toggleLargeConstraints(enabled) {
+                this.settings.largeConstraints = enabled;
+                document.body.classList.toggle('large-constraints', enabled);
+                this.saveSettings();
+                
+                // Update UI
+                const toggle = document.querySelector('#constraints-toggle');
+                if (toggle) {
+                    toggle.checked = enabled;
+                }
+            }
+
+            /**
+             * Apply accessibility settings
+             */
+            applyAccessibilitySettings() {
+                document.body.classList.toggle('large-constraints', this.settings.largeConstraints);
+                
+                // Update toggle states
+                const hapticToggle = document.querySelector('#haptic-toggle');
+                const constraintsToggle = document.querySelector('#constraints-toggle');
+                
+                if (hapticToggle) hapticToggle.checked = this.settings.hapticFeedback;
+                if (constraintsToggle) constraintsToggle.checked = this.settings.largeConstraints;
+            }
+
+            /**
+             * Load custom theme from CSS file
+             */
+            async loadCustomTheme(cssPath) {
+                try {
+                    const response = await fetch(cssPath);
+                    if (!response.ok) {
+                        throw new Error(`Failed to load theme: ${response.status}`);
+                    }
+
+                    const css = await response.text();
+                    const themeData = this.parseCustomTheme(css);
+                    
+                    if (!themeData) {
+                        throw new Error('Invalid theme format');
+                    }
+
+                    // Inject CSS
+                    this.injectCustomCSS(themeData.id, css);
+                    
+                    // Register theme
+                    this.customThemes.set(themeData.id, themeData);
+                    
+                    // Update theme dropdown
+                    this.updateThemeDropdown();
+                    
+                    return { success: true, themeId: themeData.id };
+                } catch (error) {
+                    console.error('Failed to load custom theme:', error);
+                    return { success: false, error: error.message };
+                }
+            }
+
+            /**
+             * Parse custom theme CSS
+             */
+            parseCustomTheme(css) {
+                // Extract theme metadata from comments
+                const nameMatch = css.match(/\/\*\s*Custom Theme:\s*(.+?)\s*\*\//);
+                const authorMatch = css.match(/\/\*\s*Author:\s*(.+?)\s*\*\//);
+                const versionMatch = css.match(/\/\*\s*Version:\s*(.+?)\s*\*\//);
+                
+                // Extract theme ID from CSS selector
+                const themeIdMatch = css.match(/:root\[data-theme="(.+?)"\]/);
+                
+                if (!themeIdMatch) {
+                    console.error('Theme CSS must contain :root[data-theme="theme-id"] selector');
+                    return null;
+                }
+
+                // Validate required CSS properties
+                const requiredProps = ['--primary-bg', '--cell-bg-type1-active', '--cell-bg-type2-active', '--text-primary'];
+                const hasRequiredProps = requiredProps.every(prop => css.includes(prop));
+                
+                if (!hasRequiredProps) {
+                    console.error('Theme CSS missing required properties:', requiredProps);
+                    return null;
+                }
+
+                return {
+                    id: themeIdMatch[1],
+                    name: nameMatch ? nameMatch[1] : 'Custom Theme',
+                    author: authorMatch ? authorMatch[1] : 'Unknown',
+                    version: versionMatch ? versionMatch[1] : '1.0.0',
+                    css: css,
+                    type: 'custom'
+                };
+            }
+
+            /**
+             * Inject custom CSS into document
+             */
+            injectCustomCSS(themeId, css) {
+                // Remove existing theme stylesheet
+                const existing = document.head.querySelector(`style[data-theme-id="${themeId}"]`);
+                if (existing) {
+                    document.head.removeChild(existing);
+                }
+                
+                // Create and inject new stylesheet
+                const styleElement = document.createElement('style');
+                styleElement.setAttribute('data-theme-id', themeId);
+                styleElement.textContent = css;
+                document.head.appendChild(styleElement);
+            }
+
+            /**
+             * Get all available themes (built-in + custom)
+             */
+            getAvailableThemes() {
+                const themes = [];
+                
+                // Add built-in icon themes
+                Object.values(this.iconThemes).forEach(theme => {
+                    themes.push({ ...theme, type: 'built-in' });
+                });
+                
+                // Add custom icon themes
+                this.customIconThemes.forEach((theme, id) => {
+                    themes.push({ ...theme, type: 'custom' });
+                });
+                
+                return themes;
+            }
+
+            /**
+             * Update theme dropdown with available themes
+             */
+            updateThemeDropdown() {
+                const dropdown = document.querySelector('[data-testid="theme-dropdown"]');
+                if (!dropdown) return;
+
+                // Clear existing options
+                dropdown.innerHTML = '';
+                
+                // Add built-in icon themes
+                Object.entries(this.iconThemes).forEach(([id, theme]) => {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = theme.name;
+                    dropdown.appendChild(option);
+                });
+                
+                // Add custom icon themes
+                this.customIconThemes.forEach((theme, id) => {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = `${theme.name} (Custom)`;
+                    dropdown.appendChild(option);
+                });
+                
+                // Set current selection
+                dropdown.value = this.currentIconTheme;
+            }
+
+            /**
+             * Update appearance mode buttons
+             */
+            updateAppearanceButtons() {
+                const buttons = document.querySelectorAll('.appearance-btn');
+                buttons.forEach(btn => {
+                    const mode = btn.dataset.mode;
+                    btn.classList.toggle('active', mode === this.appearanceMode);
+                });
+            }
+
+            /**
+             * Update icon theme preview
+             */
+            updateThemePreview() {
+                const previewGrid = document.querySelector('[data-testid="preview-grid"]');
+                const description = document.querySelector('[data-testid="theme-description"]');
+                
+                if (previewGrid) {
+                    previewGrid.dataset.iconTheme = this.currentIconTheme;
+                }
+                
+                if (description) {
+                    const iconTheme = this.iconThemes[this.currentIconTheme];
+                    if (iconTheme) {
+                        description.textContent = `${iconTheme.name}: ${iconTheme.description}`;
+                    }
+                }
+
+                // Update preview cells with current icon theme symbols
+                const iconTheme = this.iconThemes[this.currentIconTheme];
+                if (iconTheme) {
+                    this.updatePreviewCells(iconTheme);
+                }
+            }
+
+            /**
+             * Save settings to localStorage
+             */
+            saveSettings() {
+                const settings = {
+                    currentIconTheme: this.currentIconTheme,
+                    appearanceMode: this.appearanceMode,
+                    hapticFeedback: this.settings.hapticFeedback,
+                    largeConstraints: this.settings.largeConstraints
+                };
+                
+                localStorage.setItem('theme-settings', JSON.stringify(settings));
+            }
+
+            /**
+             * Load settings from localStorage
+             */
+            loadSettings() {
+                try {
+                    const saved = localStorage.getItem('theme-settings');
+                    if (!saved) return;
+                    
+                    const settings = JSON.parse(saved);
+                    
+                    if (settings.currentIconTheme) this.currentIconTheme = settings.currentIconTheme;
+                    if (settings.appearanceMode) this.appearanceMode = settings.appearanceMode;
+                    if (typeof settings.hapticFeedback === 'boolean') {
+                        this.settings.hapticFeedback = settings.hapticFeedback;
+                    }
+                    if (typeof settings.largeConstraints === 'boolean') {
+                        this.settings.largeConstraints = settings.largeConstraints;
+                    }
+                } catch (error) {
+                    console.warn('Failed to load theme settings:', error);
+                }
+            }
+
+            /**
+             * Export theme configuration for sharing
+             */
+            exportTheme() {
+                const theme = this.builtInThemes[this.currentTheme] || this.customThemes.get(this.currentTheme);
+                if (!theme) return null;
+
+                return {
+                    ...theme,
+                    exportedAt: new Date().toISOString(),
+                    version: theme.version || '1.0.0'
+                };
+            }
+
+            /**
+             * Import theme from configuration
+             */
+            importTheme(config) {
+                if (!config.id || !config.name) {
+                    throw new Error('Invalid theme configuration');
+                }
+
+                if (config.type === 'custom' && config.css) {
+                    this.injectCustomCSS(config.id, config.css);
+                    this.customThemes.set(config.id, config);
+                    this.updateThemeDropdown();
+                    return true;
+                }
+
+                return false;
+            }
+        }
+
+        // Global exports for testing and integration
+        window.GridSystem = GridSystem;
+        window.RuleValidator = RuleValidator;
+        window.GameManager = GameManager;
+        window.PuzzleValidator = PuzzleValidator;
+        window.PuzzleGenerator = PuzzleGenerator;
+        window.ThemeManager = ThemeManager;
+
+        // Game instance and UI integration
+        let gameInstance;
+        let timerInterval;
+        let themeManager;
+        
+        // Validation delay configuration
+        const VALIDATION_DELAY = 500; // milliseconds
+        let validationTimeout = null;
+        
+        // Expose validation delay globally for testing
+        window.VALIDATION_DELAY = VALIDATION_DELAY;
+
+        // URL Parameter Utilities
+        function parseURLParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                size: params.get('size'),
+                difficulty: params.get('difficulty'),
+                seed: params.get('seed')
+            };
+        }
+
+        function updateURL(size, difficulty, seed) {
+            const params = new URLSearchParams();
+            if (size) params.set('size', size);
+            if (difficulty) params.set('difficulty', difficulty);
+            if (seed) params.set('seed', seed);
+            
+            const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+            window.history.replaceState({}, '', newUrl);
+        }
+
+        function validateParams(size, difficulty, seed) {
+            const validSizes = ['4', '6', '8', '10'];
+            const validDifficulties = ['easy', 'medium', 'hard'];
+            
+            return {
+                size: validSizes.includes(size) ? parseInt(size) : 6,
+                difficulty: validDifficulties.includes(difficulty) ? difficulty : 'medium',
+                seed: seed && seed.length > 0 ? seed.toUpperCase() : null
+            };
+        }
+
+        // Initialize game when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize theme system first
+            themeManager = new ThemeManager();
+            
+            initializeGameFromURL();
+            setupEventListeners();
+            updateUIImmediate();
+            startTimerUpdate();
+        });
+
+        function initializeGame() {
+            const size = parseInt(document.querySelector('[data-testid="board-size-select"]').value);
+            const difficulty = document.querySelector('[data-testid="difficulty-select"]').value;
+            gameInstance = new GameManager(size, difficulty);
+            window.gameInstance = gameInstance; // For testing
+        }
+
+        function initializeGameFromURL() {
+            // Parse URL parameters
+            const urlParams = parseURLParams();
+            const validated = validateParams(urlParams.size, urlParams.difficulty, urlParams.seed);
+            
+            // Update UI controls to match URL parameters
+            document.querySelector('[data-testid="board-size-select"]').value = validated.size;
+            document.querySelector('[data-testid="difficulty-select"]').value = validated.difficulty;
+            
+            // Initialize game with URL parameters
+            if (validated.seed) {
+                gameInstance = new GameManager(validated.size, validated.difficulty);
+                gameInstance.newGame(validated.size, validated.difficulty, validated.seed);
+            } else {
+                gameInstance = new GameManager(validated.size, validated.difficulty);
+            }
+            
+            window.gameInstance = gameInstance; // For testing
+            
+            // Update URL to clean up any invalid parameters
+            updateURL(validated.size, validated.difficulty, gameInstance.seed);
+        }
+
+        function setupEventListeners() {
+            // Game grid clicks
+            const gameGrid = document.querySelector('[data-testid="game-grid"]');
+            gameGrid.addEventListener('click', handleCellClick);
+
+            // Control buttons
+            document.querySelector('[data-testid="undo-btn"]').addEventListener('click', handleUndo);
+            document.querySelector('[data-testid="hints-btn"]').addEventListener('click', handleHint);
+            document.querySelector('[data-testid="new-game-btn"]').addEventListener('click', handleNewGame);
+            document.querySelector('[data-testid="reset-btn"]').addEventListener('click', handleReset);
+
+            // Configuration changes
+            document.querySelector('[data-testid="board-size-select"]').addEventListener('change', handleConfigChange);
+            document.querySelector('[data-testid="difficulty-select"]').addEventListener('change', handleConfigChange);
+            document.querySelector('[data-testid="seed-input"]').addEventListener('input', handleSeedInput);
+            document.querySelector('[data-testid="seed-input"]').addEventListener('keydown', handleSeedKeydown);
+
+            // Theme toggle
+            document.querySelector('[data-testid="theme-toggle"]').addEventListener('click', toggleTheme);
+
+            // Theme modal event listeners
+            setupThemeModalEventListeners();
+
+            // Global keyboard shortcuts
+            document.addEventListener('keydown', handleGlobalKeydown);
+        }
+
+        function setupThemeModalEventListeners() {
+            const modal = document.querySelector('[data-testid="theme-modal"]');
+            
+            // Close modal when clicking outside
+            modal.addEventListener('click', function(event) {
+                if (event.target === modal) {
+                    closeThemeModal();
+                }
+            });
+
+            // Keyboard navigation for appearance buttons
+            const appearanceButtons = document.querySelectorAll('.appearance-btn');
+            appearanceButtons.forEach((button, index) => {
+                button.addEventListener('keydown', function(event) {
+                    if (event.key === 'ArrowLeft' && index > 0) {
+                        appearanceButtons[index - 1].focus();
+                        event.preventDefault();
+                    } else if (event.key === 'ArrowRight' && index < appearanceButtons.length - 1) {
+                        appearanceButtons[index + 1].focus();
+                        event.preventDefault();
+                    }
+                });
+            });
+        }
+
+        function handleGlobalKeydown(event) {
+            // ESC key closes theme modal
+            if (event.key === 'Escape') {
+                const modal = document.querySelector('[data-testid="theme-modal"]');
+                if (modal && modal.style.display !== 'none') {
+                    closeThemeModal();
+                    event.preventDefault();
+                }
+            }
+        }
+
+        function handleCellClick(event) {
+            const cell = event.target.closest('[data-testid="grid-cell"]');
+            if (!cell) return;
+
+            const row = parseInt(cell.dataset.row);
+            const col = parseInt(cell.dataset.col);
+            const currentValue = cell.dataset.cellValue;
+
+            // Trigger haptic feedback for successful interactions
+            if (themeManager && themeManager.settings.hapticFeedback) {
+                themeManager.triggerHapticFeedback('light');
+            }
+
+            let nextValue;
+            if (currentValue === 'null' || currentValue === null) {
+                nextValue = 'orange';
+            } else if (currentValue === 'orange') {
+                nextValue = 'moon';
+            } else {
+                nextValue = null;
+            }
+
+            const result = gameInstance.makeMove(row, col, nextValue);
+            if (result.success) {
+                updateUI();
+                if (gameInstance.gameState === 'completed') {
+                    showCompletionDialog();
+                }
+            }
+        }
+
+        function handleUndo() {
+            const result = gameInstance.undo();
+            if (result.success) {
+                updateUI();
+            }
+        }
+
+        function handleHint() {
+            const hint = gameInstance.getHint();
+            if (hint.success) {
+                const cell = document.querySelector(`[data-row="${hint.row}"][data-col="${hint.col}"]`);
+                if (cell) {
+                    cell.style.animation = 'none';
+                    cell.offsetHeight; // Trigger reflow
+                    cell.style.animation = 'error-pulse 0.6s ease-in-out';
+                    setTimeout(() => {
+                        cell.style.animation = '';
+                    }, 600);
+                }
+            }
+        }
+
+        function handleNewGame() {
+            const size = parseInt(document.querySelector('[data-testid="board-size-select"]').value);
+            const difficulty = document.querySelector('[data-testid="difficulty-select"]').value;
+            const seedInput = document.querySelector('[data-testid="seed-input"]').value;
+            
+            gameInstance.newGame(size, difficulty, seedInput.trim() || null);
+            document.querySelector('[data-testid="seed-input"]').value = '';
+            
+            // Update URL with new game parameters
+            updateURL(size, difficulty, gameInstance.seed);
+            
+            updateUIImmediate();
+        }
+
+        function handleReset() {
+            gameInstance.resetGame();
+            updateUIImmediate();
+        }
+
+        function handleConfigChange() {
+            // NEW LOGIC: Generate new game immediately when size or difficulty changes
+            const size = parseInt(document.querySelector('[data-testid="board-size-select"]').value);
+            const difficulty = document.querySelector('[data-testid="difficulty-select"]').value;
+            
+            // Clear any existing seed input to ensure fresh random game generation
+            document.querySelector('[data-testid="seed-input"]').value = '';
+            
+            // Generate new game with updated settings (no custom seed = random generation)
+            gameInstance.newGame(size, difficulty);
+            
+            // Update URL with new parameters and generated seed
+            updateURL(size, difficulty, gameInstance.seed);
+            
+            // Update UI to reflect new game state
+            updateUIImmediate();
+        }
+
+        function handleSeedInput() {
+            // Validate seed input
+            const input = document.querySelector('[data-testid="seed-input"]');
+            input.value = input.value.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+        }
+
+        function handleSeedKeydown(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                
+                const size = parseInt(document.querySelector('[data-testid="board-size-select"]').value);
+                const difficulty = document.querySelector('[data-testid="difficulty-select"]').value;
+                const seedInput = document.querySelector('[data-testid="seed-input"]').value;
+                
+                if (seedInput.trim()) {
+                    gameInstance.newGame(size, difficulty, seedInput.trim());
+                    document.querySelector('[data-testid="seed-input"]').value = '';
+                    
+                    // Update URL with new parameters
+                    updateURL(size, difficulty, gameInstance.seed);
+                    
+                    updateUIImmediate();
+                }
+            }
+        }
+
+        // Theme & Style System UI Functions
+
+        /**
+         * Toggle theme - opens theme modal (replaces old simple theme toggle)
+         */
+        function toggleTheme() {
+            openThemeModal();
+        }
+
+        /**
+         * Open theme modal
+         */
+        function openThemeModal() {
+            const modal = document.querySelector('[data-testid="theme-modal"]');
+            if (modal) {
+                modal.style.display = 'block';
+                
+                // Update UI state
+                if (themeManager) {
+                    themeManager.updateAppearanceButtons();
+                    themeManager.updateThemeDropdown();
+                    themeManager.updateThemePreview();
+                }
+                
+                // Focus management for accessibility
+                const firstButton = modal.querySelector('.appearance-btn');
+                if (firstButton) {
+                    setTimeout(() => firstButton.focus(), 100);
+                }
+            }
+        }
+
+        /**
+         * Close theme modal
+         */
+        function closeThemeModal() {
+            const modal = document.querySelector('[data-testid="theme-modal"]');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        /**
+         * Set appearance mode (Light/Dark/Auto)
+         */
+        function setAppearanceMode(mode) {
+            if (themeManager) {
+                themeManager.setAppearanceMode(mode);
+            }
+        }
+
+        /**
+         * Select icon theme from dropdown
+         */
+        function selectIconTheme(themeId) {
+            if (themeManager) {
+                themeManager.loadIconTheme(themeId);
+                
+                // Update theme preview
+                themeManager.updateThemePreview();
+                
+                // Trigger haptic feedback
+                themeManager.triggerHapticFeedback('light');
+            }
+        }
+
+        /**
+         * Legacy function - redirect to icon theme selection
+         */
+        function selectTheme(themeId) {
+            selectIconTheme(themeId);
+        }
+
+        /**
+         * Toggle haptic feedback setting
+         */
+        function toggleHapticFeedback(enabled) {
+            if (themeManager) {
+                themeManager.toggleHapticFeedback(enabled);
+            }
+        }
+
+        /**
+         * Toggle large constraint icons setting
+         */
+        function toggleLargeConstraints(enabled) {
+            if (themeManager) {
+                themeManager.toggleLargeConstraints(enabled);
+            }
+        }
+
+        /**
+         * Handle cell click with haptic feedback integration
+         */
+        function handleCellClickWithHaptic(row, col) {
+            // Trigger haptic feedback before game logic
+            if (themeManager && themeManager.settings.hapticFeedback) {
+                themeManager.triggerHapticFeedback('light');
+            }
+            
+            // Process game logic
+            if (gameInstance) {
+                gameInstance.handleCellClick(row, col);
+            }
+        }
+
+        function updateUI() {
+            updateGrid();
+            updateTimer();
+            updateControls();
+            updateSeedDisplay();
+            debouncedUpdateErrors();
+        }
+        
+        function updateUIImmediate() {
+            updateGrid();
+            updateTimer();
+            updateControls();
+            updateSeedDisplay();
+            immediateUpdateErrors();
+        }
+
+        function updateGrid() {
+            const gameGrid = document.querySelector('[data-testid="game-grid"]');
+            const size = gameInstance.gridSystem.size;
+            
+            gameGrid.dataset.size = size;
+            
+            // Update responsive grid classes
+            gameGrid.className = `game-grid responsive-grid-container grid-size-${size}`;
+            
+            gameGrid.innerHTML = '';
+
+            for (let row = 0; row < size; row++) {
+                for (let col = 0; col < size; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    cell.dataset.testid = 'grid-cell';
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    
+                    const cellData = gameInstance.gridSystem.getCell(row, col);
+                    cell.dataset.cellValue = cellData.value || 'null';
+                    cell.dataset.cellImmutable = cellData.immutable;
+                    
+                    const symbol = document.createElement('span');
+                    symbol.className = 'cell-symbol';
+                    symbol.textContent = getCellSymbol(cellData.value);
+                    cell.appendChild(symbol);
+
+                    gameGrid.appendChild(cell);
+                }
+            }
+
+            updateConstraintIndicators();
+        }
+
+        function updateConstraintIndicators() {
+            const constraints = gameInstance.gridSystem.getConstraints();
+            
+            constraints.forEach(constraint => {
+                const cell1 = document.querySelector(`[data-row="${constraint.cell1.row}"][data-col="${constraint.cell1.col}"]`);
+                const cell2 = document.querySelector(`[data-row="${constraint.cell2.row}"][data-col="${constraint.cell2.col}"]`);
+                
+                if (cell1 && cell2) {
+                    const indicator = document.createElement('div');
+                    indicator.className = `constraint-indicator ${constraint.type}`;
+                    indicator.dataset.testid = `constraint-${constraint.type}`;
+                    
+                    // Set the symbol text content
+                    if (constraint.type === 'equal') {
+                        indicator.textContent = '=';
+                    } else if (constraint.type === 'notequal') {
+                        indicator.textContent = '≠';
+                    }
+                    
+                    // Determine position based on constraint direction
+                    if (constraint.cell1.row === constraint.cell2.row) {
+                        // Horizontal constraint
+                        indicator.classList.add('right');
+                        cell1.appendChild(indicator);
+                    } else {
+                        // Vertical constraint
+                        indicator.classList.add('bottom');
+                        cell1.appendChild(indicator);
+                    }
+                }
+            });
+        }
+
+        function getCellSymbol(value) {
+            if (!themeManager || !themeManager.iconThemes) {
+                // Fallback to default symbols if theme system not loaded
+                switch (value) {
+                    case 'orange': return '0';
+                    case 'moon': return '1';
+                    default: return '';
+                }
+            }
+
+            const iconTheme = themeManager.iconThemes[themeManager.currentIconTheme];
+            if (!iconTheme) {
+                // Fallback to classic theme
+                switch (value) {
+                    case 'orange': return '0';
+                    case 'moon': return '1';
+                    default: return '';
+                }
+            }
+
+            switch (value) {
+                case 'orange': return iconTheme.symbols.primary;
+                case 'moon': return iconTheme.symbols.secondary;
+                default: return '';
+            }
+        }
+
+        function updateTimer() {
+            const timerElement = document.querySelector('[data-testid="timer"]');
+            const statusElement = document.querySelector('.timer-status');
+            
+            timerElement.textContent = gameInstance.formatTime();
+            
+            let status;
+            switch (gameInstance.gameState) {
+                case 'ready': status = 'READY'; break;
+                case 'playing': status = 'PLAYING'; break;
+                case 'completed': status = 'COMPLETED'; break;
+                default: status = 'UNKNOWN';
+            }
+            statusElement.textContent = status;
+        }
+
+        function updateControls() {
+            const undoBtn = document.querySelector('[data-testid="undo-btn"]');
+            undoBtn.disabled = gameInstance.currentMoveIndex < 0;
+        }
+
+        function updateSeedDisplay() {
+            const seedDisplay = document.querySelector('[data-testid="current-seed"]');
+            // Ensure seed is always 8 characters for display consistency
+            let displaySeed = gameInstance.seed || 'UNKNOWN';
+            if (displaySeed.length < 8) {
+                displaySeed = displaySeed.padEnd(8, '0');
+            } else if (displaySeed.length > 8) {
+                displaySeed = displaySeed.substring(0, 8);
+            }
+            seedDisplay.textContent = displaySeed;
+        }
+
+        function updateErrors() {
+            // Clear previous error states
+            document.querySelectorAll('[data-cell-error="true"]').forEach(cell => {
+                cell.dataset.cellError = 'false';
+            });
+
+            // Apply new error states
+            const errorCells = gameInstance.ruleValidator.getErrorCells();
+            errorCells.forEach(errorCell => {
+                const cellElement = document.querySelector(`[data-row="${errorCell.row}"][data-col="${errorCell.col}"]`);
+                if (cellElement) {
+                    cellElement.dataset.cellError = 'true';
+                    cellElement.dataset.errorType = errorCell.type;
+                }
+            });
+        }
+
+        function debouncedUpdateErrors() {
+            // Clear any existing timeout
+            if (validationTimeout) {
+                clearTimeout(validationTimeout);
+            }
+            
+            // Set new timeout for delayed validation
+            validationTimeout = setTimeout(() => {
+                updateErrors();
+                validationTimeout = null;
+            }, VALIDATION_DELAY);
+        }
+        
+        function immediateUpdateErrors() {
+            // Clear any pending delayed validation
+            if (validationTimeout) {
+                clearTimeout(validationTimeout);
+                validationTimeout = null;
+            }
+            
+            // Update errors immediately
+            updateErrors();
+        }
+
+        function startTimerUpdate() {
+            timerInterval = setInterval(updateTimer, 100);
+        }
+
+        function showCompletionDialog() {
+            const dialog = document.querySelector('[data-testid="completion-dialog"]');
+            const timeElement = document.querySelector('[data-testid="completion-time"]');
+            const difficultyElement = document.querySelector('[data-testid="completion-difficulty"]');
+            const sizeElement = document.querySelector('[data-testid="completion-size"]');
+            const seedElement = document.querySelector('[data-testid="completion-seed"]');
+            
+            timeElement.textContent = gameInstance.formatTime();
+            difficultyElement.textContent = gameInstance.difficulty.charAt(0).toUpperCase() + gameInstance.difficulty.slice(1);
+            sizeElement.textContent = `${gameInstance.gridSystem.size}x${gameInstance.gridSystem.size}`;
+            seedElement.textContent = gameInstance.seed;
+            
+            dialog.classList.add('show');
+        }
+
+        function closeCompletionDialog() {
+            const dialog = document.querySelector('[data-testid="completion-dialog"]');
+            dialog.classList.remove('show');
+        }
+
+        function startNewGame() {
+            closeCompletionDialog();
+            handleNewGame();
+        }
+
+        // Theme loading is now handled by ThemeManager
+    </script>
+</body>
+</html>
