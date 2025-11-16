@@ -18,6 +18,7 @@
             --border-color: #6c7086;
             --border-hover: #9399b2;
             --shadow-color: rgba(0, 0, 0, 0.3);
+            --toggle-slider-color: white;
             
             /* Cell Background Variables */
             --cell-bg-empty: var(--secondary-bg);
@@ -30,7 +31,7 @@
         }
 
         [data-appearance="light"] {
-            --primary-bg: #ffffff;
+            --primary-bg: #efeded;
             --secondary-bg: #f5f5f5;
             --tertiary-bg: #e0e0e0;
             --text-primary: #333333;
@@ -40,10 +41,15 @@
             --border-color: #cccccc;
             --border-hover: #999999;
             --shadow-color: rgba(0, 0, 0, 0.1);
+            --toggle-slider-color: #efeded;
             
             /* Light theme cell background overrides */
+            --cell-bg-empty: #ffffff;
             --cell-bg-type1-active: #ff8c42;
             --cell-bg-type2-active: #4285f4;
+            --cell-bg-type1-immutable: #f5f5f5;
+            --cell-bg-type2-immutable: #f5f5f5;
+            --cell-bg-hover: #f0f0f0;
         }
 
         /* Responsive Grid System */
@@ -66,14 +72,18 @@
 
         .grid-size-8 {
             --grid-size: 8;
-            --gap-total: 1.75rem;
-            --cell-size: min(56px, calc((100vw - 1.5rem - var(--gap-total)) / var(--grid-size)));
+            --gap-total: 14px;
+            --padding-total: 20px;
+            --margin-total: 2rem;
+            --cell-size: min(50px, calc((100vw - var(--margin-total) - var(--padding-total) - var(--gap-total)) / var(--grid-size)));
         }
 
         .grid-size-10 {
             --grid-size: 10;
-            --gap-total: 2.25rem;
-            --cell-size: min(48px, calc((100vw - 1rem - var(--gap-total)) / var(--grid-size)));
+            --gap-total: 18px;
+            --padding-total: 20px;
+            --margin-total: 1.5rem;
+            --cell-size: min(50px, calc((100vw - var(--margin-total) - var(--padding-total) - var(--gap-total)) / var(--grid-size)));
         }
 
         /* Base Styles */
@@ -166,12 +176,7 @@
             padding: 10px;
             box-shadow: 0 8px 24px var(--shadow-color);
             width: fit-content;
-        }
-
-        /* Responsive grids still need max-width constraint */
-        .game-grid.grid-size-8,
-        .game-grid.grid-size-10 {
-            max-width: min(85vw, 85vh);
+            max-width: 95vw;
         }
 
         .game-grid[data-size="4"] { grid-template-columns: repeat(4, var(--cell-size)); }
@@ -253,23 +258,26 @@
             0%, 100% { 
                 transform: scale(1);
                 box-shadow: 0 0 0 rgba(74, 222, 128, 0);
+                background-color: var(--cell-bg-empty);
             }
             25% { 
                 transform: scale(1.05);
                 box-shadow: 0 0 15px rgba(74, 222, 128, 0.6);
+                background-color: rgba(74, 222, 128, 0.2);
             }
             50% { 
                 transform: scale(1.1);
                 box-shadow: 0 0 20px rgba(74, 222, 128, 0.8);
+                background-color: rgba(74, 222, 128, 0.3);
             }
             75% { 
                 transform: scale(1.05);
                 box-shadow: 0 0 15px rgba(74, 222, 128, 0.6);
+                background-color: rgba(74, 222, 128, 0.2);
             }
         }
 
         .cell-symbol {
-            font-weight: bold;
             text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
         }
 
@@ -570,7 +578,7 @@
             width: 18px;
             left: 2px;
             bottom: 2px;
-            background-color: white;
+            background-color: var(--toggle-slider-color);
             transition: 0.3s;
             border-radius: 50%;
         }
@@ -913,8 +921,7 @@
 
         .btn-label {
             font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
+            font-weight: normal;
             letter-spacing: 0.5px;
         }
 
@@ -1069,6 +1076,13 @@
             }
         }
 
+        @media (max-width: 400px) {
+            .btn {
+                padding: 6px 6px;
+                min-width: 50px;
+            }
+        }
+
         /* Theme Modal Styles */
         .theme-modal {
             display: none;
@@ -1178,7 +1192,7 @@
 
         .appearance-btn.active {
             background: var(--cell-bg-type2-active);
-            color: white;
+            color: var(--primary-bg);
         }
 
         .mode-icon {
@@ -1314,7 +1328,7 @@
             width: 20px;
             left: 4px;
             bottom: 4px;
-            background-color: white;
+            background-color: var(--toggle-slider-color);
             transition: 0.3s;
             border-radius: 50%;
         }
@@ -1496,11 +1510,13 @@
                         <select class="theme-dropdown-inline" onchange="selectIconTheme(this.value)">
                             <option value="classic">Classic (0, 1)</option>
                             <option value="fire-ice">Fire & Ice (❄️, 🔥)</option>
-                            <option value="nature">Nature (🐢, 🐰)</option>
+                            <option value="nature">Nature (🐰, 🐢)</option>
                             <option value="day-night">Day & Night (🌙, ☀️)</option>
                             <option value="shapes">Shapes (⭕, ❌)</option>
-                            <option value="numbers">Numbers (➊, ➋)</option>
+                            <option value="heart-mind">Heart & Mind (❤️, 🧠)</option>
+                            <option value="diamond-pearl">Diamond & Pearl (💎, ⭐)</option>
                             <option value="black-white">Black & White (⬜, ⬛)</option>
+                            <option value="bean">Bean (☕, 🫘)</option>
                         </select>
                     </div>
                     
@@ -1648,6 +1664,7 @@
                     <option value="fire-ice">Fire & Ice (❄️, 🔥)</option>
                     <option value="nature">Nature (🐢, 🐰)</option>
                     <option value="day-night">Day & Night (🌙, ☀️)</option>
+                            <option value="shapes">Shapes (⭕, ❌)</option>
                     <option value="shapes">Shapes (⭕, ❌)</option>
                     <option value="numbers">Numbers (➊, ➋)</option>
                     <option value="black-white">Black & White (⬜, ⬛)</option>
@@ -4088,6 +4105,20 @@
                         symbols: { primary: '🐰', secondary: '🐢' },
                         preview: ['🐰', '🐢']
                     },
+                    'nature': {
+                        id: 'nature',
+                        name: 'Nature',
+                        description: 'Rabbit and turtle symbols',
+                        symbols: { primary: '🐰', secondary: '🐢' },
+                        preview: ['🐰', '🐢']
+                    },
+                    'shapes': {
+                        id: 'shapes',
+                        name: 'Shapes',
+                        description: 'Circle and cross symbols',
+                        symbols: { primary: '⭕', secondary: '❌' },
+                        preview: ['⭕', '❌']
+                    },
                     'bean': {
                         id: 'bean',
                         name: 'Bean',
@@ -4817,8 +4848,8 @@
                     // Store original content
                     const originalHTML = cell.innerHTML;
                     
-                    // Show suggested value temporarily
-                    const symbol = hint.suggestedValue === 'orange' ? '🟠' : '🌙';
+                    // Show suggested value temporarily using current theme
+                    const symbol = getCellSymbol(hint.suggestedValue);
                     const symbolSpan = cell.querySelector('.cell-symbol') || document.createElement('span');
                     symbolSpan.className = 'cell-symbol';
                     symbolSpan.textContent = symbol;
